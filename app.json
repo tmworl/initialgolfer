@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "GolfScoreTracker",
+    "slug": "golfscoretracker",
+    "scheme": "mygolfapp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "sdkVersion": "52.0.0",
+    "extra": {
+      "eas": {
+        "projectId": "f533582e-60df-40c6-94a0-cb0d233655f5"
+      }
+    },
+    "owner": "tworl"
+  }
+}
