@@ -41,7 +41,7 @@ const InsightsSummaryCard = ({ summary, loading = false, onRefresh }) => {
   ) : (
     <Typography variant="secondary" italic>
       Complete a round to get personalized insights from your golf coach. 
-      Track your shots to see patterns and get tips to improve your game.
+      Track your shots to see patterns and improve your game.
     </Typography>
   );
   
