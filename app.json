@@ -11,6 +11,14 @@
         "projectId": "f533582e-60df-40c6-94a0-cb0d233655f5"
       }
     },
-    "owner": "tworl"
+    "owner": "tworl",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/f533582e-60df-40c6-94a0-cb0d233655f5"
+    },
+    "android": {},
+    "ios": {}
   }
 }
