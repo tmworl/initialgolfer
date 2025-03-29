@@ -18,7 +18,14 @@
     "updates": {
       "url": "https://u.expo.dev/f533582e-60df-40c6-94a0-cb0d233655f5"
     },
-    "android": {},
-    "ios": {}
+    "android": {
+      "package": "com.tworl.golfscoretracker"
+    },
+    "ios": {
+      "bundleIdentifier": "y",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    }
   }
 }
