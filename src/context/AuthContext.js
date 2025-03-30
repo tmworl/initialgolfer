@@ -1,6 +1,6 @@
 // src/context/AuthContext.js
 
-import React, { createContext, useState, useEffect } from "react";
+import React, { createContext, useState, useEffect, useCallback } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Linking } from "react-native";
 import { supabase } from "../services/supabase";
@@ -25,6 +25,40 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   // 'error' stores any error messages from auth operations.
   const [error, setError] = useState(null);
+  // 'userPermissions' stores the user's permission records
+  const [userPermissions, setUserPermissions] = useState([]);
+
+  // Load user permissions from the database
+  const loadUserPermissions = async (userId) => {
+    if (!userId) return;
+    
+    try {
+      console.log("Loading permissions for user:", userId);
+      
+      const { data, error } = await supabase
+        .from("user_permissions")
+        .select("*")
+        .eq("profile_id", userId)
+        .eq("active", true);
+        
+      if (error) {
+        console.error("Error loading user permissions:", error);
+        return;
+      }
+      
+      console.log("Loaded permissions:", data?.length);
+      setUserPermissions(data || []);
+    } catch (err) {
+      console.error("Exception loading user permissions:", err);
+    }
+  };
+
+  // Helper function to check if a user has a specific permission
+  const hasPermission = useCallback((permissionId) => {
+    return userPermissions.some(
+      permission => permission.permission_id === permissionId && permission.active
+    );
+  }, [userPermissions]);
 
   // Handle deep links for email verification
   const handleDeepLink = async (event) => {
@@ -53,6 +87,9 @@ export const AuthProvider = ({ children }) => {
           const isVerified = checkEmailVerification(data.session.user);
           setEmailVerified(isVerified);
           
+          // Load user permissions
+          await loadUserPermissions(data.session.user.id);
+          
           if (isVerified && pendingVerificationEmail) {
             console.log("Email verified successfully!");
             // Clear pending verification state
@@ -77,6 +114,9 @@ export const AuthProvider = ({ children }) => {
           setUser(data.session.user);
           // Set email verification status based on email_confirmed_at
           setEmailVerified(checkEmailVerification(data.session.user));
+          
+          // Load user permissions
+          await loadUserPermissions(data.session.user.id);
         } else {
           // No active session, check for pending verification
           const pendingEmail = await AsyncStorage.getItem('@GolfApp:pendingVerificationEmail');
@@ -103,6 +143,9 @@ export const AuthProvider = ({ children }) => {
         const isVerified = checkEmailVerification(session.user);
         setEmailVerified(isVerified);
         
+        // Load user permissions
+        loadUserPermissions(session.user.id);
+        
         // If user is now verified and we had a pending verification, clear it
         if (isVerified && pendingVerificationEmail) {
           setPendingVerificationEmail(null);
@@ -111,6 +154,7 @@ export const AuthProvider = ({ children }) => {
       } else {
         setUser(null);
         setEmailVerified(false);
+        setUserPermissions([]); // Clear permissions when user logs out
       }
     });
 
@@ -141,6 +185,9 @@ export const AuthProvider = ({ children }) => {
       } else {
         setUser(data.user);
         setEmailVerified(checkEmailVerification(data.user));
+        
+        // Load user permissions after successful sign in
+        await loadUserPermissions(data.user.id);
       }
     } catch (err) {
       setError("An unexpected error occurred during sign in.");
@@ -237,6 +284,7 @@ export const AuthProvider = ({ children }) => {
         setUser(null);
         setEmailVerified(false);
         setPendingVerificationEmail(null);
+        setUserPermissions([]); // Clear permissions on sign out
         await AsyncStorage.removeItem('@GolfApp:pendingVerificationEmail');
       }
     } catch (err) {
@@ -259,7 +307,9 @@ export const AuthProvider = ({ children }) => {
       setError,
       emailVerified,
       pendingVerificationEmail,
-      resendVerificationEmail
+      resendVerificationEmail,
+      userPermissions,
+      hasPermission
     }}>
       {children}
     </AuthContext.Provider>

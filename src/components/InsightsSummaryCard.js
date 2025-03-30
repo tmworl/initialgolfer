@@ -1,18 +1,18 @@
 // src/components/InsightsSummaryCard.js
 
-import React from "react";
+import React, { useContext } from "react";
 import { View, StyleSheet, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import theme from "../ui/theme";
 import Typography from "../ui/components/Typography";
 import Card from "../ui/components/Card";
+import { AuthContext } from "../context/AuthContext";
 
 /**
  * InsightsSummaryCard Component
  * 
  * Displays a card with a golf coach icon and insights summary.
- * Shows appropriate content for both when insights exist and when they don't.
- * Enhanced with design system components for visual consistency.
+ * Shows appropriate content based on user permissions and data availability.
  * 
  * @param {object} props
  * @param {string|null} props.summary - The insights summary text to display
@@ -20,6 +20,10 @@ import Card from "../ui/components/Card";
  * @param {function} props.onRefresh - Function to call when refresh button is pressed
  */
 const InsightsSummaryCard = ({ summary, loading = false, onRefresh }) => {
+  // Get permission status from AuthContext
+  const { hasPermission } = useContext(AuthContext);
+  const hasPremiumAccess = hasPermission("product_a");
+  
   // If we're loading, show a loading state
   if (loading) {
     return (
@@ -35,15 +39,28 @@ const InsightsSummaryCard = ({ summary, loading = false, onRefresh }) => {
     );
   }
   
-  // Define content based on whether we have a summary or not
-  const cardContent = summary ? (
-    <Typography variant="body">{summary}</Typography>
-  ) : (
-    <Typography variant="secondary" italic>
-      Complete a round to get personalized insights from your golf coach. 
-      Track your shots to see patterns and improve your game.
-    </Typography>
-  );
+  // Define content based on permission status and data availability
+  let cardContent;
+  
+  if (hasPremiumAccess) {
+    // Premium user with access to full insights
+    cardContent = summary ? (
+      <Typography variant="body">{summary}</Typography>
+    ) : (
+      <Typography variant="secondary" italic>
+        Complete a round to get personalized insights from your golf coach. 
+        Track your shots to see patterns and improve your game.
+      </Typography>
+    );
+  } else {
+    // Non-premium user - show conversion hook
+    cardContent = (
+      <Typography variant="secondary" italic>
+        We've identified a pattern in your game that's costing you shots. 
+        Upgrade to unlock your personalized improvement plan.
+      </Typography>
+    );
+  }
   
   return (
     <Card style={styles.card}>
@@ -56,8 +73,8 @@ const InsightsSummaryCard = ({ summary, loading = false, onRefresh }) => {
           <Typography variant="subtitle">Coach's Corner</Typography>
         </View>
         
-        {/* Add refresh button - only shown when not loading */}
-        {onRefresh && (
+        {/* Add refresh button - only shown for premium users when not loading */}
+        {hasPremiumAccess && onRefresh && (
           <TouchableOpacity 
             style={styles.refreshButton}
             onPress={onRefresh}
@@ -72,7 +89,7 @@ const InsightsSummaryCard = ({ summary, loading = false, onRefresh }) => {
         )}
       </View>
       
-      {/* Card content - either insights summary or empty state */}
+      {/* Card content - either insights summary or empty state or upgrade hook */}
       <View style={styles.content}>
         {cardContent}
       </View>
