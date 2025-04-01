@@ -1,3 +1,5 @@
+// src/services/courseService.js
+
 import { supabase } from './supabase';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -51,7 +53,7 @@ export const searchCourses = async (searchTerm) => {
       
       const { data, error } = await supabase
         .from('courses')
-        .select('id, name, club_name, location, tees')
+        .select('id, name, club_name, location, tees, poi')  // Now also requesting POI data
         .or(`name.ilike.%${trimmedTerm}%,location.ilike.%${trimmedTerm}%,club_name.ilike.%${trimmedTerm}%`)
         .order('name')
         .limit(15);
@@ -64,7 +66,8 @@ export const searchCourses = async (searchTerm) => {
       // Format response to match expected structure
       return data?.map(course => ({
         ...course,
-        has_tee_data: course.tees !== null && Array.isArray(course.tees) && course.tees.length > 0
+        has_tee_data: course.tees !== null && Array.isArray(course.tees) && course.tees.length > 0,
+        has_poi_data: course.poi !== null && Array.isArray(course.poi) && course.poi.length > 0
       })) || [];
     }
     
@@ -139,7 +142,7 @@ export const getRecentCourses = async (userId, limit = 5) => {
       // Get course details for unique IDs
       const { data: courses, error: coursesError } = await supabase
         .from('courses')
-        .select('id, name, club_name, location, tees')
+        .select('id, name, club_name, location, tees, poi')  // Now also requesting POI data
         .in('id', uniqueCourseIds);
       
       if (coursesError) {
@@ -154,7 +157,8 @@ export const getRecentCourses = async (userId, limit = 5) => {
         if (course) {
           orderedCourses.push({
             ...course,
-            has_tee_data: course.tees !== null && Array.isArray(course.tees) && course.tees.length > 0
+            has_tee_data: course.tees !== null && Array.isArray(course.tees) && course.tees.length > 0,
+            has_poi_data: course.poi !== null && Array.isArray(course.poi) && course.poi.length > 0
           });
         }
       });
@@ -199,7 +203,7 @@ export const getAllCourses = async () => {
       
       const { data, error } = await supabase
         .from('courses')
-        .select('id, name, club_name, location, tees')
+        .select('id, name, club_name, location, tees, poi') // Now also requesting POI data
         .order('name');
       
       if (error) {
@@ -207,10 +211,11 @@ export const getAllCourses = async () => {
         throw error;
       }
       
-      // Add has_tee_data flag
+      // Add has_tee_data and has_poi_data flags
       return data?.map(course => ({
         ...course,
-        has_tee_data: course.tees !== null && Array.isArray(course.tees) && course.tees.length > 0
+        has_tee_data: course.tees !== null && Array.isArray(course.tees) && course.tees.length > 0,
+        has_poi_data: course.poi !== null && Array.isArray(course.poi) && course.poi.length > 0
       })) || [];
     }
     
@@ -225,19 +230,20 @@ export const getAllCourses = async () => {
 };
 
 /**
- * Get full course details by ID
+ * Get full course details by ID, with enhanced POI data
  * 
  * @param {string} courseId - The course ID to fetch
+ * @param {boolean} forcePOIRefresh - Force refresh of POI data even if already present
  * @return {Promise<Object|null>} - The course object or null if not found
  */
-export const getCourseById = async (courseId) => {
+export const getCourseById = async (courseId, forcePOIRefresh = false) => {
   try {
     console.log('[courseService] Getting course details for ID:', courseId);
     
     // Get auth token for request
     const token = await getAuthToken();
     
-    // Call edge function for course details
+    // First, get basic course details
     const response = await fetch(`${EDGE_FUNCTION_BASE_URL}/get-course-details/${courseId}`, {
       method: 'GET',
       headers: {
@@ -245,6 +251,8 @@ export const getCourseById = async (courseId) => {
         'Authorization': token ? `Bearer ${token}` : '',
       }
     });
+    
+    let courseData = null;
     
     if (!response.ok) {
       // If edge function fails, fall back to direct database query
@@ -261,14 +269,80 @@ export const getCourseById = async (courseId) => {
         throw error;
       }
       
-      return data;
+      courseData = data;
+    } else {
+      // Process successful edge function response
+      courseData = await response.json();
     }
     
-    // Process successful edge function response
-    return await response.json();
+    // If course has no POI data or a refresh is forced, try to get detailed POI information
+    if (courseData && (forcePOIRefresh || !courseData.poi || !Array.isArray(courseData.poi) || courseData.poi.length === 0)) {
+      console.log('[courseService] Fetching detailed POI data for course');
+      
+      // Call the detailed info edge function to get POI data
+      const detailResponse = await fetch(`${EDGE_FUNCTION_BASE_URL}/get-course-detailed-info/${courseId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : '',
+        }
+      });
+      
+      if (detailResponse.ok) {
+        const detailData = await detailResponse.json();
+        
+        // If detailed data has POI information, merge it with our course data
+        if (detailData && detailData.poi && Array.isArray(detailData.poi) && detailData.poi.length > 0) {
+          console.log('[courseService] Merging POI data from detailed info');
+          courseData.poi = detailData.poi;
+          courseData.has_poi_data = true;
+        }
+      } else {
+        console.warn('[courseService] Could not fetch detailed POI data');
+      }
+    }
+    
+    // Add flags for data presence
+    if (courseData) {
+      courseData.has_tee_data = courseData.tees !== null && 
+                              Array.isArray(courseData.tees) && 
+                              courseData.tees.length > 0;
+                              
+      courseData.has_poi_data = courseData.poi !== null && 
+                             Array.isArray(courseData.poi) && 
+                             courseData.poi.length > 0;
+    }
+    
+    return courseData;
     
   } catch (error) {
     console.error('[courseService] Exception in getCourseById:', error);
+    return null;
+  }
+};
+
+/**
+ * Pre-load POI data for a course if needed
+ * This is particularly useful before starting a round to ensure
+ * we have the most complete POI data available
+ * 
+ * @param {string} courseId - The course ID to fetch POI data for
+ * @return {Promise<Object|null>} - The course with POI data or null if error
+ */
+export const ensureCourseHasPoiData = async (courseId) => {
+  try {
+    // Get the course with a forced POI refresh
+    const course = await getCourseById(courseId, true);
+    
+    if (course && course.has_poi_data) {
+      console.log('[courseService] Course has POI data:', course.poi.length, 'elements');
+      return course;
+    } else {
+      console.log('[courseService] Course does not have POI data after refresh attempt');
+      return course; // Return the course anyway, just without POI data
+    }
+  } catch (error) {
+    console.error('[courseService] Error ensuring course has POI data:', error);
     return null;
   }
 };

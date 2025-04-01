@@ -160,6 +160,7 @@ export default function CourseSelectorScreen({ navigation }) {
   /**
    * Start a round with the selected course and tee
    * Enhanced to ensure proper data flow and direct navigation to tracker
+   * Now includes POI data when available
    */
   const handleStartRound = async () => {
     try {
@@ -179,10 +180,12 @@ export default function CourseSelectorScreen({ navigation }) {
         courseId: selectedCourse.id,
         courseName: selectedCourse.name,
         teeId: selectedTeeId,
-        teeName: selectedTee.name
+        teeName: selectedTee.name,
+        hasPoi: selectedCourse.poi ? "Yes" : "No"
       });
       
       // Store the selected course and tee in AsyncStorage
+      // Now including POI data when available
       await AsyncStorage.setItem("selectedCourse", JSON.stringify({
         id: selectedCourse.id,
         name: selectedCourse.name,
@@ -190,7 +193,8 @@ export default function CourseSelectorScreen({ navigation }) {
         location: selectedCourse.location || "",
         teeId: selectedTeeId,
         teeName: selectedTee.name,
-        teeColor: selectedTee.color
+        teeColor: selectedTee.color,
+        poi: selectedCourse.poi || [] // Include POI data if available
       }));
       
       // Navigate directly to the tracker screen with replace

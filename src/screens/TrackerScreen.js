@@ -27,6 +27,7 @@ import AppText from "../components/AppText";
  * 
  * This screen allows users to track shots during a round of golf.
  * Uses the new data structure for tracking and saving hole data.
+ * Enhanced to include POI data for each hole when available.
  */
 export default function TrackerScreen({ navigation }) {
   // Get the authenticated user from context
@@ -37,6 +38,7 @@ export default function TrackerScreen({ navigation }) {
   const [totalHoles] = useState(18); // Standard golf round is 18 holes
   
   // Initialize hole data structure for all holes
+  // Now includes poi field to store Points of Interest for each hole
   const initialHoleState = {};
   for (let i = 1; i <= 18; i++) {
     initialHoleState[i] = {
@@ -58,7 +60,10 @@ export default function TrackerScreen({ navigation }) {
         "Putts": { "On Target": 0, "Slightly Off": 0, "Recovery Needed": 0 },
         "Sand": { "On Target": 0, "Slightly Off": 0, "Recovery Needed": 0 },
         "Penalties": { "On Target": 0, "Slightly Off": 0, "Recovery Needed": 0 }
-      }
+      },
+      
+      // POI data for this hole
+      poi: null
     };
   }
   
@@ -102,6 +107,7 @@ export default function TrackerScreen({ navigation }) {
 
   /**
    * Save the current hole data to AsyncStorage
+   * Now includes POI data within the hole data structure
    */
   const saveCurrentHoleToStorage = useCallback(async () => {
     if (!round) return;
@@ -111,7 +117,7 @@ export default function TrackerScreen({ navigation }) {
       const existingDataStr = await AsyncStorage.getItem(`round_${round.id}_holes`);
       const existingData = existingDataStr ? JSON.parse(existingDataStr) : {};
       
-      // Update with current hole data
+      // Update with current hole data - POI data is now included in holeData
       existingData[currentHole] = holeData[currentHole];
       
       // Save back to AsyncStorage
@@ -124,6 +130,7 @@ export default function TrackerScreen({ navigation }) {
 
   /**
    * Load hole data from AsyncStorage
+   * Will now include POI data if it was previously saved
    */
   const loadHoleDataFromStorage = useCallback(async () => {
     if (!round) return;
@@ -196,6 +203,7 @@ export default function TrackerScreen({ navigation }) {
 
   /**
    * Update hole information when courseDetails or currentHole changes
+   * Now includes mapping POI data for the current hole
    */
   useEffect(() => {
     // Update hole information when courseDetails is available
@@ -221,6 +229,21 @@ export default function TrackerScreen({ navigation }) {
           }
         }
         
+        // Find POI data for the current hole if available
+        let holePoi = null;
+        if (course && course.poi && Array.isArray(course.poi)) {
+          // Find POI data for this specific hole
+          const holePoiData = course.poi.find(poi => poi.hole === currentHole);
+          if (holePoiData) {
+            holePoi = {
+              greens: holePoiData.greens || [],
+              bunkers: holePoiData.bunkers || [],
+              hazards: holePoiData.hazards || [],
+              tees: holePoiData.tees || []
+            };
+          }
+        }
+        
         // Update hole data with course information
         setHoleData(prevData => {
           const newData = { ...prevData };
@@ -232,7 +255,8 @@ export default function TrackerScreen({ navigation }) {
               par: currentHoleInfo.par_men || null,
               distance: distance || null,
               index: currentHoleInfo.index_men || null,
-              features: currentHoleInfo.features || []
+              features: currentHoleInfo.features || [],
+              poi: holePoi // Add POI data to hole
             };
           }
           
@@ -244,6 +268,7 @@ export default function TrackerScreen({ navigation }) {
 
   /**
    * Initialize round on component mount
+   * Enhanced to handle POI data from selected course
    */
   useEffect(() => {
     const initializeRound = async () => {
@@ -265,6 +290,13 @@ export default function TrackerScreen({ navigation }) {
         setCourse(courseData);
         
         console.log("Starting round with course and tee:", courseData);
+        
+        // Log POI availability for debugging
+        if (courseData.poi && Array.isArray(courseData.poi)) {
+          console.log(`Course has POI data for ${courseData.poi.length} holes`);
+        } else {
+          console.log("Course does not have POI data");
+        }
         
         // Check if there's an in-progress round in AsyncStorage
         const existingRoundStr = await AsyncStorage.getItem("currentRound");
@@ -435,7 +467,7 @@ export default function TrackerScreen({ navigation }) {
 
   /**
    * Complete the round - save all hole data to database
-   * Enhanced to navigate directly to scorecard
+   * Enhanced to include POI data in the saved hole_data
    */
   const finishRound = async () => {
     try {
@@ -463,17 +495,21 @@ export default function TrackerScreen({ navigation }) {
         const holeInfo = storedHoleData[holeNum];
         const totalScore = holeInfo.shots.length;
         
+        // Create hole data object including POI data
+        const holeDataForDb = {
+          par: holeInfo.par,
+          distance: holeInfo.distance,
+          index: holeInfo.index,
+          features: holeInfo.features,
+          shots: holeInfo.shots,
+          poi: holeInfo.poi // Include POI data in database record
+        };
+        
         // Save hole data to database
         await saveHoleData(
           round.id,
           holeNum,
-          {
-            par: holeInfo.par,
-            distance: holeInfo.distance,
-            index: holeInfo.index,
-            features: holeInfo.features,
-            shots: holeInfo.shots
-          },
+          holeDataForDb,
           totalScore
         );
         
