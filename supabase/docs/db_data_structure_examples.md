@@ -1,5 +1,6 @@
- Example data:
- 
+Example - Courses:
+
+[
   {
     "id": "035bdac0-f35b-4e3e-86a6-4950ccb4fc86",
     "name": "Torrey Pines Golf Course (South)",
@@ -98,7 +99,8 @@
         "course_rating_men": 74.2,
         "course_rating_women": 80.5
       }
-    ]
+    ],
+    "poi": null
   },
   {
     "id": "8efd196f-54a2-4352-9fba-b5e935002c62",
@@ -334,7 +336,8 @@
         "course_rating_men": 72,
         "course_rating_women": 77.4
       }
-    ]
+    ],
+    "poi": null
   },
   {
     "id": "994eecee-a6df-4f60-a9d8-3d81efcdcaaa",
@@ -458,26 +461,14 @@
         "course_rating_men": 67.3,
         "course_rating_women": 71.7
       }
-    ]
+    ],
+    "poi": null
   }
 ]
 
+Example, Rounds:
 
-Rounds:
 [
-  {
-    "id": "904baf82-f49e-4d42-9628-fe04cd28bdde",
-    "profile_id": "c0b385b2-5cc8-4737-b383-52be2f74ec9a",
-    "course_id": "733d04c4-f9ba-4913-9a7c-5e9aa92cf01f",
-    "date": "2025-03-16 00:34:44.069595+00",
-    "is_complete": false,
-    "created_at": "2025-03-16 00:34:44.069595+00",
-    "updated_at": "2025-03-16 00:34:44.069595+00",
-    "score": null,
-    "gross_shots": null,
-    "selected_tee_id": null,
-    "selected_tee_name": null
-  },
   {
     "id": "6ee651f4-4045-40a8-8b51-5732ce05a6c4",
     "profile_id": "c0b385b2-5cc8-4737-b383-52be2f74ec9a",
@@ -492,19 +483,6 @@ Rounds:
     "selected_tee_name": "Red"
   },
   {
-    "id": "893722f6-8f74-4d9e-a678-27a2a1607738",
-    "profile_id": "c0b385b2-5cc8-4737-b383-52be2f74ec9a",
-    "course_id": "733d04c4-f9ba-4913-9a7c-5e9aa92cf01f",
-    "date": "2025-03-16 19:51:23.940683+00",
-    "is_complete": true,
-    "created_at": "2025-03-16 19:51:23.940683+00",
-    "updated_at": "2025-03-16 19:51:23.940683+00",
-    "score": -57,
-    "gross_shots": 15,
-    "selected_tee_id": null,
-    "selected_tee_name": null
-  },
-  {
     "id": "d400a3ad-7734-4995-b18b-b8c9645171df",
     "profile_id": "c0b385b2-5cc8-4737-b383-52be2f74ec9a",
     "course_id": "994eecee-a6df-4f60-a9d8-3d81efcdcaaa",
@@ -516,19 +494,6 @@ Rounds:
     "gross_shots": 3,
     "selected_tee_id": "106673",
     "selected_tee_name": "White"
-  },
-  {
-    "id": "20211f8f-fbcb-45a1-b335-c741d57ef954",
-    "profile_id": "c0b385b2-5cc8-4737-b383-52be2f74ec9a",
-    "course_id": "733d04c4-f9ba-4913-9a7c-5e9aa92cf01f",
-    "date": "2025-03-16 00:42:48.085535+00",
-    "is_complete": false,
-    "created_at": "2025-03-16 00:42:48.085535+00",
-    "updated_at": "2025-03-16 00:42:48.085535+00",
-    "score": null,
-    "gross_shots": null,
-    "selected_tee_id": null,
-    "selected_tee_name": null
   },
   {
     "id": "3475f542-9f34-4b35-926f-ec27bf7945a4",
@@ -570,19 +535,6 @@ Rounds:
     "selected_tee_name": "Blue"
   },
   {
-    "id": "776c35bf-ba18-419c-9ec9-0db577033c87",
-    "profile_id": "c0b385b2-5cc8-4737-b383-52be2f74ec9a",
-    "course_id": "733d04c4-f9ba-4913-9a7c-5e9aa92cf01f",
-    "date": "2025-03-16 19:04:56.703686+00",
-    "is_complete": false,
-    "created_at": "2025-03-16 19:04:56.703686+00",
-    "updated_at": "2025-03-16 19:04:56.703686+00",
-    "score": null,
-    "gross_shots": null,
-    "selected_tee_id": null,
-    "selected_tee_name": null
-  },
-  {
     "id": "adaf294a-99b8-4b99-a503-972e40a841d4",
     "profile_id": "c0b385b2-5cc8-4737-b383-52be2f74ec9a",
     "course_id": "8efd196f-54a2-4352-9fba-b5e935002c62",
@@ -594,10 +546,37 @@ Rounds:
     "gross_shots": null,
     "selected_tee_id": "301246",
     "selected_tee_name": "Red"
+  },
+  {
+    "id": "a74fcd4e-27e2-4ca2-935d-fe4f1772af57",
+    "profile_id": "c0b385b2-5cc8-4737-b383-52be2f74ec9a",
+    "course_id": "8efd196f-54a2-4352-9fba-b5e935002c62",
+    "date": "2025-03-18 14:15:58.517871+00",
+    "is_complete": true,
+    "created_at": "2025-03-18 14:15:58.517871+00",
+    "updated_at": "2025-03-18 14:15:58.517871+00",
+    "score": -25,
+    "gross_shots": 45,
+    "selected_tee_id": "301245",
+    "selected_tee_name": "Blue"
+  },
+  {
+    "id": "b82e3ff3-f84f-4028-8511-51ac50c4b47d",
+    "profile_id": "c0b385b2-5cc8-4737-b383-52be2f74ec9a",
+    "course_id": "8efd196f-54a2-4352-9fba-b5e935002c62",
+    "date": "2025-03-31 07:59:45.799557+00",
+    "is_complete": true,
+    "created_at": "2025-03-31 07:59:45.799557+00",
+    "updated_at": "2025-03-31 07:59:45.799557+00",
+    "score": -61,
+    "gross_shots": 9,
+    "selected_tee_id": "301246",
+    "selected_tee_name": "Red"
   }
 ]
 
-Shots: (but really a holes table)
+Example - shots:
+
 [
   {
     "id": "ab4925d2-7784-4bc7-9f67-968793c09719",
@@ -633,126 +612,6 @@ Shots: (but really a holes table)
     },
     "total_score": 4,
     "created_at": "2025-03-18 12:36:41.464373+00"
-  },
-  {
-    "id": "0b73edff-8c16-41aa-a8c8-062bea46597b",
-    "round_id": "893722f6-8f74-4d9e-a678-27a2a1607738",
-    "hole_number": 1,
-    "hole_data": {
-      "par": 4,
-      "index": 6,
-      "shots": [
-        {
-          "type": "Tee Shot",
-          "result": "On Target",
-          "timestamp": "2025-03-18T12:59:46.987Z"
-        },
-        {
-          "type": "Approach",
-          "result": "Slightly Off",
-          "timestamp": "2025-03-18T12:59:51.768Z"
-        },
-        {
-          "type": "Putts",
-          "result": "Slightly Off",
-          "timestamp": "2025-03-18T12:59:53.556Z"
-        },
-        {
-          "type": "Putts",
-          "result": "Slightly Off",
-          "timestamp": "2025-03-18T12:59:54.428Z"
-        },
-        {
-          "type": "Putts",
-          "result": "On Target",
-          "timestamp": "2025-03-18T12:59:55.445Z"
-        }
-      ],
-      "distance": 378,
-      "features": []
-    },
-    "total_score": 5,
-    "created_at": "2025-03-18 13:00:51.866858+00"
-  },
-  {
-    "id": "11816272-1afd-477f-bd69-00a3345510ec",
-    "round_id": "893722f6-8f74-4d9e-a678-27a2a1607738",
-    "hole_number": 2,
-    "hole_data": {
-      "par": 5,
-      "index": 10,
-      "shots": [
-        {
-          "type": "Tee Shot",
-          "result": "Slightly Off",
-          "timestamp": "2025-03-18T13:00:00.895Z"
-        },
-        {
-          "type": "Long Shot",
-          "result": "Recovery Needed",
-          "timestamp": "2025-03-18T13:00:03.134Z"
-        },
-        {
-          "type": "Approach",
-          "result": "Slightly Off",
-          "timestamp": "2025-03-18T13:00:07.115Z"
-        },
-        {
-          "type": "Chip",
-          "result": "Slightly Off",
-          "timestamp": "2025-03-18T13:00:09.306Z"
-        },
-        {
-          "type": "Putts",
-          "result": "Slightly Off",
-          "timestamp": "2025-03-18T13:00:10.692Z"
-        },
-        {
-          "type": "Putts",
-          "result": "On Target",
-          "timestamp": "2025-03-18T13:00:11.641Z"
-        }
-      ],
-      "distance": 509,
-      "features": []
-    },
-    "total_score": 6,
-    "created_at": "2025-03-18 13:00:52.085157+00"
-  },
-  {
-    "id": "dcea4755-0722-41d0-8f08-699f55be75a2",
-    "round_id": "893722f6-8f74-4d9e-a678-27a2a1607738",
-    "hole_number": 3,
-    "hole_data": {
-      "par": 4,
-      "index": 12,
-      "shots": [
-        {
-          "type": "Tee Shot",
-          "result": "Slightly Off",
-          "timestamp": "2025-03-18T13:00:17.629Z"
-        },
-        {
-          "type": "Long Shot",
-          "result": "Slightly Off",
-          "timestamp": "2025-03-18T13:00:23.782Z"
-        },
-        {
-          "type": "Chip",
-          "result": "On Target",
-          "timestamp": "2025-03-18T13:00:26.858Z"
-        },
-        {
-          "type": "Putts",
-          "result": "On Target",
-          "timestamp": "2025-03-18T13:00:27.375Z"
-        }
-      ],
-      "distance": 397,
-      "features": []
-    },
-    "total_score": 4,
-    "created_at": "2025-03-18 13:00:52.313154+00"
   },
   {
     "id": "a4e18278-7edb-41c1-a792-4ffccf535149",
@@ -1018,34 +877,141 @@ Shots: (but really a holes table)
     },
     "total_score": 7,
     "created_at": "2025-03-18 20:38:59.940118+00"
+  },
+  {
+    "id": "4df54d5e-6252-40d8-879f-ac68a6df11eb",
+    "round_id": "a74fcd4e-27e2-4ca2-935d-fe4f1772af57",
+    "hole_number": 7,
+    "hole_data": {
+      "par": 3,
+      "index": 18,
+      "shots": [
+        {
+          "type": "Tee Shot",
+          "result": "Slightly Off",
+          "timestamp": "2025-03-18T14:29:42.881Z"
+        },
+        {
+          "type": "Putts",
+          "result": "On Target",
+          "timestamp": "2025-03-18T14:29:48.162Z"
+        },
+        {
+          "type": "Chip",
+          "result": "On Target",
+          "timestamp": "2025-03-18T14:29:48.380Z"
+        }
+      ],
+      "distance": 107,
+      "features": []
+    },
+    "total_score": 3,
+    "created_at": "2025-03-18 20:39:00.138437+00"
+  },
+  {
+    "id": "a6ea2edd-1002-45ba-aee2-37b58d49a5a9",
+    "round_id": "a74fcd4e-27e2-4ca2-935d-fe4f1772af57",
+    "hole_number": 8,
+    "hole_data": {
+      "par": 4,
+      "index": 4,
+      "shots": [
+        {
+          "type": "Tee Shot",
+          "result": "Recovery Needed",
+          "timestamp": "2025-03-18T14:30:10.341Z"
+        },
+        {
+          "type": "Long Shot",
+          "result": "Slightly Off",
+          "timestamp": "2025-03-18T14:30:18.103Z"
+        },
+        {
+          "type": "Approach",
+          "result": "Slightly Off",
+          "timestamp": "2025-03-18T14:30:25.945Z"
+        },
+        {
+          "type": "Chip",
+          "result": "Slightly Off",
+          "timestamp": "2025-03-18T14:30:27.497Z"
+        },
+        {
+          "type": "Putts",
+          "result": "Slightly Off",
+          "timestamp": "2025-03-18T14:30:28.552Z"
+        },
+        {
+          "type": "Putts",
+          "result": "Slightly Off",
+          "timestamp": "2025-03-18T14:30:28.816Z"
+        },
+        {
+          "type": "Putts",
+          "result": "On Target",
+          "timestamp": "2025-03-18T14:30:30.273Z"
+        }
+      ],
+      "distance": 416,
+      "features": []
+    },
+    "total_score": 7,
+    "created_at": "2025-03-18 20:39:00.357864+00"
+  },
+  {
+    "id": "0ba46764-225a-4631-a084-be2adc3d0e0e",
+    "round_id": "d400a3ad-7734-4995-b18b-b8c9645171df",
+    "hole_number": 1,
+    "hole_data": {
+      "par": 4,
+      "index": 6,
+      "shots": [
+        {
+          "type": "Tee Shot",
+          "result": "On Target",
+          "timestamp": "2025-03-21T10:21:30.527Z"
+        },
+        {
+          "type": "Long Shot",
+          "result": "On Target",
+          "timestamp": "2025-03-21T10:21:31.076Z"
+        },
+        {
+          "type": "Approach",
+          "result": "On Target",
+          "timestamp": "2025-03-21T10:21:31.427Z"
+        }
+      ],
+      "distance": 337,
+      "features": [
+        {
+          "type": "green",
+          "latitude": 36.5705944,
+          "location": "front",
+          "longitude": -121.9462765
+        },
+        {
+          "type": "green",
+          "latitude": 36.570575,
+          "location": "back",
+          "longitude": -121.945962
+        },
+        {
+          "side": "left",
+          "type": "fairway_bunker",
+          "latitude": 36.5706622,
+          "longitude": -121.9470832
+        }
+      ]
+    },
+    "total_score": 3,
+    "created_at": "2025-03-21 10:21:39.810142+00"
   }
 ]
 
-Insights:
+Example - Insights:
+
 [
-  {
-    "id": "49cc4a7a-ef66-4fb1-b400-489a8be2da9f",
-    "profile_id": "c0b385b2-5cc8-4737-b383-52be2f74ec9a",
-    "round_id": "24cbf10e-715d-4da3-814f-a2072fee85e3",
-    "insights": {
-      "reason": "With 43 'Slightly Off' putts versus 36 'On Target' putts across complete rounds, you're likely taking extra putts to finish holes. This directly adds strokes to your score and creates additional pressure on your approach shots knowing your putting isn't reliable.",
-      "summary": "Your game shows reasonable consistency with tee shots, with about half being on target. However, putting and approach shots appear to be areas of concern, with a high percentage of putts being 'Slightly Off' and approach shots showing inconsistent execution.",
-      "progress": null,
-      "generatedAt": "2025-03-15T12:23:40.642Z",
-      "primaryIssue": "Your putting consistency is the primary area costing you strokes, with nearly half of all putts being 'Slightly Off'.",
-      "managementTip": "When approaching greens, prioritize getting the ball to positions that create simpler, more straightforward putts, even if it means aiming away from pins tucked in difficult locations.",
-      "practiceFocus": "Focus practice sessions on distance control in putting, particularly from the 5-15 foot range where many 'Slightly Off' first putts likely result in second putts.",
-      "analyzedRounds": [
-        "24cbf10e-715d-4da3-814f-a2072fee85e3",
-        "bb363ab8-6f25-4a0b-aa4a-c4b435de6c49",
-        "1644af80-b7d9-453b-bcad-e8224794d985",
-        "78f7c546-ea19-4866-b605-d08f57e9ed21",
-        "102daae7-a32d-4fe3-98f4-8065ac63b0a5"
-      ]
-    },
-    "created_at": "2025-03-15 12:23:40.642+00",
-    "feedback_rating": null
-  },
   {
     "id": "5b0efddd-ad6e-4bd6-87d0-71065d267867",
     "profile_id": "c0b385b2-5cc8-4737-b383-52be2f74ec9a",
@@ -1067,29 +1033,6 @@ Insights:
       ]
     },
     "created_at": "2025-03-18 12:36:51.625+00",
-    "feedback_rating": null
-  },
-  {
-    "id": "686cd47d-d876-48e4-87ec-01b2021d6c94",
-    "profile_id": "c0b385b2-5cc8-4737-b383-52be2f74ec9a",
-    "round_id": "893722f6-8f74-4d9e-a678-27a2a1607738",
-    "insights": {
-      "reason": "When approach shots fall slightly off target, they typically force a chip or additional putt, immediately adding 1-2 strokes per hole. This pattern is evident on hole 1 of your second round, where a slightly off approach led to three putts, and on hole 2, where the slightly off approach required a chip recovery followed by two putts.",
-      "summary": "Your game shows a tendency toward slightly off approach shots and putting, particularly on longer holes. While your tee shots are reasonably consistent, the follow-up shots often require additional strokes to recover, especially on the par 5 hole where a slightly off tee shot led to compounding problems with subsequent shots.",
-      "progress": null,
-      "generatedAt": "2025-03-18T13:01:04.819Z",
-      "primaryIssue": "Approach shots that miss the green are consistently adding extra strokes through required chip shots and additional putts.",
-      "managementTip": "When facing approach shots after slightly off-target drives, aim for the center of the green rather than attacking pins, as data shows your slightly off approaches often lead to difficult chip shots and three-putts.",
-      "practiceFocus": "Dedicate 60% of practice time to approach shots from 100-150 yards, focusing on distance control and landing zone accuracy rather than pin hunting. Follow with putting drills emphasizing lag putting to reduce three-putts.",
-      "analyzedRounds": [
-        "6ee651f4-4045-40a8-8b51-5732ce05a6c4",
-        "893722f6-8f74-4d9e-a678-27a2a1607738",
-        "24cbf10e-715d-4da3-814f-a2072fee85e3",
-        "bb363ab8-6f25-4a0b-aa4a-c4b435de6c49",
-        "1644af80-b7d9-453b-bcad-e8224794d985"
-      ]
-    },
-    "created_at": "2025-03-18 13:01:04.819+00",
     "feedback_rating": null
   },
   {
@@ -1163,18 +1106,8 @@ Insights:
   }
 ]
 
-Profiles:
-[
-  {
-    "id": "c0b385b2-5cc8-4737-b383-52be2f74ec9a",
-    "email": "example@gmail.com",
-    "handicap": null,
-    "created_at": "2025-02-03 23:48:16.467751+00",
-    "updated_at": "2025-02-13 23:02:49.688+00"
-  }
-]
+Example - User permissions:
 
-User permissions:
 [
   {
     "id": "79346854-1ae9-4bf8-a7be-1aa0aa7a8fbc",
@@ -1189,3 +1122,19 @@ User permissions:
     "metadata": null
   }
 ]
+
+Example - Profiles:
+
+[
+  {
+    "id": "c0b385b2-5cc8-4737-b383-52be2f74ec9a",
+    "email": "example@gmail.com",
+    "handicap": null,
+    "created_at": "2025-02-03 23:48:16.467751+00",
+    "updated_at": "2025-02-13 23:02:49.688+00"
+  }
+]
+
+Example - auth:
+
+
