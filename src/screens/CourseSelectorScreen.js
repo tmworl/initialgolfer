@@ -16,7 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Layout from "../ui/Layout";
 import theme from "../ui/theme";
-import { getAllCourses, searchCourses, getRecentCourses } from "../services/courseService";
+import { getAllCourses, searchCourses, getRecentCourses, getCourseById, ensureCourseHasPoiData } from "../services/courseService";
 import AppText from "../components/AppText";
 import SkeletonCourseCard from "../components/SkeletonCourseCard";
 import { AuthContext } from "../context/AuthContext";
@@ -41,6 +41,7 @@ export default function CourseSelectorScreen({ navigation }) {
   // Loading states
   const [isLoadingAll, setIsLoadingAll] = useState(true);
   const [isLoadingRecent, setIsLoadingRecent] = useState(true);
+  const [isLoadingCourseDetails, setIsLoadingCourseDetails] = useState(false);
   
   // Search related state
   const [searchQuery, setSearchQuery] = useState("");
@@ -139,14 +140,44 @@ export default function CourseSelectorScreen({ navigation }) {
   
   /**
    * Handle selecting a course
+   * Enhanced to fetch detailed course data when tees are missing
    */
-  const handleCourseSelect = (course) => {
+  const handleCourseSelect = async (course) => {
     setSelectedCourse(course);
     setSelectedTeeId(null); // Reset tee selection
     
     // If there's only one tee, select it automatically
     if (course.tees && course.tees.length === 1) {
       setSelectedTeeId(course.tees[0].id);
+    }
+    
+    // If course is from API search and lacks tees data, fetch complete details
+    if (!course.tees || !Array.isArray(course.tees) || course.tees.length === 0) {
+      try {
+        console.log("Course is missing tee data, fetching complete details");
+        setIsLoadingCourseDetails(true);
+        
+        // Get detailed course info with tees data
+        const detailedCourse = await getCourseById(course.id);
+        
+        if (detailedCourse && detailedCourse.tees && Array.isArray(detailedCourse.tees) && detailedCourse.tees.length > 0) {
+          console.log(`Found ${detailedCourse.tees.length} tees for this course`);
+          
+          // Update the selected course with complete data
+          setSelectedCourse(detailedCourse);
+          
+          // Auto-select first tee if only one is available
+          if (detailedCourse.tees.length === 1) {
+            setSelectedTeeId(detailedCourse.tees[0].id);
+          }
+        } else {
+          console.warn("Failed to retrieve tee data for course:", course.id);
+        }
+      } catch (error) {
+        console.error("Error fetching detailed course info:", error);
+      } finally {
+        setIsLoadingCourseDetails(false);
+      }
     }
   };
   
@@ -184,6 +215,18 @@ export default function CourseSelectorScreen({ navigation }) {
         hasPoi: selectedCourse.poi ? "Yes" : "No"
       });
       
+      // Pre-load POI data if needed - optimization for better in-round experience
+      let courseWithPoi = selectedCourse;
+      if (!selectedCourse.poi && selectedCourse.id) {
+        try {
+          console.log("Pre-loading POI data for course");
+          courseWithPoi = await ensureCourseHasPoiData(selectedCourse.id);
+        } catch (poiError) {
+          console.warn("Failed to pre-load POI data:", poiError);
+          // Continue without POI data - non-critical
+        }
+      }
+      
       // Store the selected course and tee in AsyncStorage
       // Now including POI data when available
       await AsyncStorage.setItem("selectedCourse", JSON.stringify({
@@ -194,7 +237,7 @@ export default function CourseSelectorScreen({ navigation }) {
         teeId: selectedTeeId,
         teeName: selectedTee.name,
         teeColor: selectedTee.color,
-        poi: selectedCourse.poi || [] // Include POI data if available
+        poi: courseWithPoi.poi || [] // Include POI data if available
       }));
       
       // Navigate directly to the tracker screen with replace
@@ -363,22 +406,31 @@ export default function CourseSelectorScreen({ navigation }) {
           )}
         </View>
         
-        {/* Tee Selection */}
+        {/* Tee Selection with Loading Indicator */}
         {selectedCourse && (
           <View style={styles.teeSelectionContainer}>
             <AppText variant="subtitle" style={styles.teeSelectionTitle}>
               Select Tee
             </AppText>
             
-            <View style={styles.teesList}>
-              {selectedCourse.tees && selectedCourse.tees.length > 0 ? (
-                selectedCourse.tees.map(tee => renderTeeOption(tee))
-              ) : (
-                <AppText variant="body" style={styles.noTeesText}>
-                  No tee information available for this course
+            {isLoadingCourseDetails ? (
+              <View style={styles.teeLoadingContainer}>
+                <ActivityIndicator size="small" color={theme.colors.primary} />
+                <AppText variant="body" style={styles.loadingText}>
+                  Loading tee options...
                 </AppText>
-              )}
-            </View>
+              </View>
+            ) : (
+              <View style={styles.teesList}>
+                {selectedCourse.tees && selectedCourse.tees.length > 0 ? (
+                  selectedCourse.tees.map(tee => renderTeeOption(tee))
+                ) : (
+                  <AppText variant="body" style={styles.noTeesText}>
+                    No tee information available for this course
+                  </AppText>
+                )}
+              </View>
+            )}
           </View>
         )}
         
@@ -386,10 +438,10 @@ export default function CourseSelectorScreen({ navigation }) {
         <TouchableOpacity
           style={[
             styles.startButton,
-            (!selectedCourse || !selectedTeeId) && styles.disabledButton
+            (!selectedCourse || !selectedTeeId || isLoadingCourseDetails) && styles.disabledButton
           ]}
           onPress={handleStartRound}
-          disabled={!selectedCourse || !selectedTeeId}
+          disabled={!selectedCourse || !selectedTeeId || isLoadingCourseDetails}
         >
           <AppText 
             variant="button" 
@@ -544,6 +596,16 @@ const styles = StyleSheet.create({
     color: "#666",
     textAlign: "center",
     padding: 8,
+  },
+  teeLoadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    flexDirection: 'row',
+  },
+  loadingText: {
+    marginLeft: 8,
+    color: '#666',
   },
   startButton: {
     backgroundColor: theme.colors.primary,

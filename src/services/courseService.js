@@ -238,6 +238,11 @@ export const getAllCourses = async () => {
  */
 export const getCourseById = async (courseId, forcePOIRefresh = false) => {
   try {
+    if (!courseId) {
+      console.error('[courseService] No course ID provided');
+      return null;
+    }
+    
     console.log('[courseService] Getting course details for ID:', courseId);
     
     // Get auth token for request
