@@ -151,16 +151,18 @@ serve(async (req) => {
         if (apiResponse.ok) {
           // Parse API response
           const apiData = await apiResponse.json();
-          console.log("API response received for course coordinates");
           
-          // Log summary for debugging
-          if (apiData && apiData.coordinates) {
+          // Log structured data about the response for diagnostic purposes
+          console.log("API response received for course coordinates", {
+            responseKeys: Object.keys(apiData),
+            hasCoordinates: !!apiData.coordinates,
+            coordinatesCount: (apiData.coordinates || []).length
+          });
+          
+          // Modified logic to handle API response structure
+          // Check for coordinates data at root level (the actual API structure)
+          if (apiData && Array.isArray(apiData.coordinates)) {
             console.log(`Received ${apiData.coordinates.length} coordinate points from API`);
-          }
-          
-          // Transform coordinates data into our POI structure
-          if (apiData && apiData.coordinates && Array.isArray(apiData.coordinates)) {
-            console.log("Transforming coordinates data into POI structure");
             
             // Create holePoi map to organize features by hole
             const holePoi = new Map();
@@ -168,12 +170,17 @@ serve(async (req) => {
             // Process each coordinate
             apiData.coordinates.forEach(coord => {
               // Validate coordinate has necessary data
-              if (!coord.holeNumber || !coord.latitude || !coord.longitude || !coord.type) {
+              if (!coord.hole || !coord.latitude || !coord.longitude) {
                 console.warn("Skipping invalid coordinate:", coord);
                 return;
               }
               
-              const holeNumber = parseInt(coord.holeNumber);
+              // Normalize hole number to ensure consistent handling of string/numeric values
+              const holeNumber = parseInt(coord.hole, 10);
+              if (isNaN(holeNumber)) {
+                console.warn(`Invalid hole number in coordinate: ${coord.hole}`);
+                return;
+              }
               
               // Initialize hole POI structure if not exists
               if (!holePoi.has(holeNumber)) {
@@ -194,82 +201,71 @@ serve(async (req) => {
                 lng: parseFloat(coord.longitude)
               };
               
-              // Classify coordinate by type and add to appropriate array
-              switch(coord.type.toLowerCase()) {
-                case 'green':
-                case 'green_front':
-                case 'green_center':
-                case 'green_back':
-                  // Determine green location (front, center, back)
-                  let location = 'center';
-                  if (coord.type.toLowerCase().includes('front')) {
-                    location = 'front';
-                  } else if (coord.type.toLowerCase().includes('back')) {
-                    location = 'back';
-                  }
+              // Map the POI values to feature types
+              // POI codes are documented in the Golf API spec but we need to map them to our domain model
+              switch(coord.poi) {
+                case 1: // Tee
+                  // Determine location (front, middle, back)
+                  let teeLocation = 'default';
+                  if (coord.location === 1) teeLocation = 'front';
+                  else if (coord.location === 2) teeLocation = 'middle';
+                  else if (coord.location === 3) teeLocation = 'back';
                   
-                  holePOIData.greens.push({
+                  holePOIData.tees.push({
                     ...point,
-                    location
+                    location: teeLocation
                   });
                   break;
-                  
-                case 'bunker':
-                case 'bunker_left':
-                case 'bunker_right':
-                case 'fairway_bunker':
-                case 'greenside_bunker':
-                  // Determine bunker side and location if available
+                
+                case 11: // Green front
+                  holePOIData.greens.push({
+                    ...point,
+                    location: 'front'
+                  });
+                  break;
+                
+                case 12: // Green center
+                  holePOIData.greens.push({
+                    ...point,
+                    location: 'center'
+                  });
+                  break;
+                
+                case 13: // Green back
+                  holePOIData.greens.push({
+                    ...point,
+                    location: 'back'
+                  });
+                  break;
+                
+                case 3: case 4: // Bunkers
+                  // Determine side (left, right, center)
                   let side = 'center';
-                  if (coord.type.toLowerCase().includes('left')) {
-                    side = 'left';
-                  } else if (coord.type.toLowerCase().includes('right')) {
-                    side = 'right';
-                  }
-                  
-                  let bunkerLocation = '';
-                  if (coord.type.toLowerCase().includes('fairway')) {
-                    bunkerLocation = 'fairway';
-                  } else if (coord.type.toLowerCase().includes('greenside')) {
-                    bunkerLocation = 'greenside';
-                  }
+                  if (coord.sideFW === 1) side = 'left';
+                  else if (coord.sideFW === 3) side = 'right';
                   
                   holePOIData.bunkers.push({
                     ...point,
                     side,
-                    ...(bunkerLocation ? { location: bunkerLocation } : {})
+                    type: coord.poi === 3 ? 'greenside' : 'fairway'
                   });
                   break;
-                  
-                case 'water':
-                case 'water_hazard':
-                case 'lateral_hazard':
-                case 'hazard':
+                
+                case 5: case 6: case 7: // Water hazards
                   holePOIData.hazards.push({
                     ...point,
-                    type: coord.type.toLowerCase().replace('_hazard', '')
+                    type: 'water'
                   });
                   break;
-                  
-                case 'tee':
-                case 'tee_box':
-                  // Add tee color/name if available
-                  const teeName = coord.name || coord.color || "default";
-                  holePOIData.tees.push({
-                    ...point,
-                    name: teeName.toLowerCase()
-                  });
-                  break;
-                  
-                default:
-                  console.warn(`Unknown coordinate type: ${coord.type}`);
+                
+                // Add more mappings as needed for other POI types
               }
             });
             
             // Convert the map to an array for storage
             const transformedPoi = Array.from(holePoi.values());
             
-            console.log(`Transformed data for ${transformedPoi.length} holes`);
+            console.log(`Transformed POI data for ${transformedPoi.length} holes`);
             
             // Validate transformed data has reasonable content
             if (transformedPoi.length === 0) {
@@ -306,6 +302,7 @@ serve(async (req) => {
               existingCourse = updatedCourse;
             }
           } else {
+            // The API response doesn't have the expected structure
             console.error("API response missing coordinates data", apiData);
             throw new Error("API returned invalid coordinates data structure");
           }

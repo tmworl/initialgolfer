@@ -135,148 +135,167 @@ serve(async (req) => {
         if (apiResponse.ok) {
           // Parse API response
           const apiData = await apiResponse.json();
-          console.log("API response received for course details");
           
-          // Log full response for debugging (in production, you might want to limit this)
-          console.log("API Response:", JSON.stringify(apiData));
+          // Log the raw API response for diagnostic purposes
+          console.log(`[get-course-details] Raw API response structure for ${apiCourseId}:`, 
+            JSON.stringify({
+              responseKeys: Object.keys(apiData),
+              hasCourse: !!apiData.course,
+              hasTees: !!(apiData.tees || (apiData.course && apiData.course.tees)),
+              teesCount: (apiData.tees || (apiData.course && apiData.course.tees) || []).length
+            })
+          );
           
-          // If we have course data
-          if (apiData && apiData.course) {
-            const course = apiData.course;
+          // Modified logic to handle both root-level and nested course structures
+          if (apiData) {
+            // Extract course data from either nested or root format
+            const course = apiData.course || 
+                         (apiData.tees && apiData.courseName ? apiData : null);
             
-            // Transform tees data
-            const transformedTees = [];
-            if (course.tees && Array.isArray(course.tees)) {
-              course.tees.forEach(tee => {
-                transformedTees.push({
-                  id: tee.id || `tee_${transformedTees.length + 1}`,
-                  name: tee.name || "Unnamed",
-                  color: tee.color || "#CCCCCC",
-                  slope_men: tee.slopeMen || null,
-                  slope_women: tee.slopeWomen || null,
-                  course_rating_men: tee.courseRatingMen || null,
-                  course_rating_women: tee.courseRatingWomen || null,
-                  total_distance: tee.totalYards || tee.totalDistance || null
+            if (course && (course.tees || []).length > 0) {
+              console.log("Successfully extracted course data with tees");
+              
+              // Transform tees data
+              const transformedTees = [];
+              if (course.tees && Array.isArray(course.tees)) {
+                course.tees.forEach(tee => {
+                  transformedTees.push({
+                    id: tee.teeID || `tee_${transformedTees.length + 1}`,
+                    name: tee.teeName || "Unnamed",
+                    color: tee.teeColor || "#CCCCCC",
+                    slope_men: tee.slopeMen || null,
+                    slope_women: tee.slopeWomen || null,
+                    course_rating_men: tee.courseRatingMen || null,
+                    course_rating_women: tee.courseRatingWomen || null,
+                    total_distance: calculateTotalDistance(tee) || null
+                  });
                 });
-              });
-            }
-            
-            // Transform holes data
-            const transformedHoles = [];
-            if (course.holes && Array.isArray(course.holes)) {
-              course.holes.forEach(hole => {
+              }
+              
+              // Transform holes data
+              const transformedHoles = [];
+              const parsMen = course.parsMen || [];
+              const parsWomen = course.parsWomen || [];
+              const indexesMen = course.indexesMen || [];
+              const indexesWomen = course.indexesWomen || [];
+              
+              // Process individual holes
+              const numHoles = parseInt(course.numHoles || "18", 10);
+              for (let i = 1; i <= numHoles; i++) {
                 // Create distances object mapped by tee name
                 const distances = {};
-                if (hole.teeDistances && Array.isArray(hole.teeDistances)) {
-                  hole.teeDistances.forEach(teeDistance => {
-                    // Find tee name from tee ID
-                    const tee = course.tees.find(t => t.id === teeDistance.teeId);
-                    if (tee && tee.name) {
-                      distances[tee.name.toLowerCase()] = teeDistance.yards;
+                if (course.tees && Array.isArray(course.tees)) {
+                  course.tees.forEach(tee => {
+                    const holeDistance = tee[`length${i}`];
+                    if (holeDistance) {
+                      distances[tee.teeName.toLowerCase()] = parseInt(holeDistance, 10);
                     }
                   });
                 }
                 
                 transformedHoles.push({
-                  number: hole.number,
-                  par_men: hole.parMen || hole.par || null,
-                  par_women: hole.parWomen || hole.par || null,
-                  index_men: hole.indexMen || hole.index || null,
-                  index_women: hole.indexWomen || hole.index || null,
+                  number: i,
+                  par_men: parsMen[i-1] || null,
+                  par_women: parsWomen[i-1] || null,
+                  index_men: indexesMen[i-1] || null,
+                  index_women: indexesWomen[i-1] || null,
                   distances: distances
                 });
-              });
-            }
-            
-            // Create transformed course data
-            const transformedCourse = {
-              name: course.name,
-              api_course_id: course.id,
-              club_name: course.club?.name || "",
-              location: `${course.location?.city || ""}, ${course.location?.state || ""}`.trim(),
-              country: course.location?.country || "",
-              latitude: course.location?.latitude || null,
-              longitude: course.location?.longitude || null,
-              num_holes: course.numHoles || 18,
-              par: course.par || null,
-              tees: transformedTees,
-              holes: transformedHoles,
-              updated_at: now.toISOString()
-            };
-            
-            // Validate transformed data meets minimum requirements
-            const isValid = 
-              transformedCourse.name && 
-              transformedCourse.par && 
-              transformedTees.length > 0 && 
-              transformedHoles.length > 0;
+              }
               
-            if (!isValid) {
-              console.error("Transformed course data is incomplete");
-              // Log specific validation failures
-              if (!transformedCourse.name) console.error("Missing course name");
-              if (!transformedCourse.par) console.error("Missing course par");
-              if (transformedTees.length === 0) console.error("Missing tee data");
-              if (transformedHoles.length === 0) console.error("Missing hole data");
-              
-              throw new Error("API returned incomplete course data");
-            }
-            
-            // Update course in database if needed
-            if (existingCourse) {
-              console.log(`Updating existing course: ${existingCourse.name}`);
-              
-              // Merge data strategy - keep existing data for fields not present in API data
-              const mergedCourse = {
-                ...existingCourse,
-                ...transformedCourse,
-                // Preserve ID
-                id: existingCourse.id,
-                // Preserve created_at
-                created_at: existingCourse.created_at
+              // Create transformed course data
+              const transformedCourse = {
+                name: course.courseName || course.name,
+                api_course_id: course.courseID || course.id,
+                club_name: course.clubName || "",
+                location: `${course.city || ""}, ${course.state || ""}`.trim(),
+                country: course.country || "",
+                latitude: course.latitude || null,
+                longitude: course.longitude || null,
+                num_holes: parseInt(course.numHoles || "18", 10),
+                par: calculateCoursePar(parsMen, numHoles),
+                tees: transformedTees,
+                holes: transformedHoles,
+                updated_at: now.toISOString()
               };
               
-              const { error: updateError } = await supabase
-                .from('courses')
-                .update(mergedCourse)
-                .eq('id', existingCourse.id);
+              // Validate transformed data meets minimum requirements
+              const isValid = 
+                transformedCourse.name && 
+                transformedCourse.par && 
+                transformedTees.length > 0 && 
+                transformedHoles.length > 0;
                 
-              if (updateError) {
-                console.error("Error updating course:", updateError);
-                throw new Error(`Database error updating course: ${updateError.message}`);
+              if (!isValid) {
+                console.error("Transformed course data is incomplete");
+                // Log specific validation failures
+                if (!transformedCourse.name) console.error("Missing course name");
+                if (!transformedCourse.par) console.error("Missing course par");
+                if (transformedTees.length === 0) console.error("Missing tee data");
+                if (transformedHoles.length === 0) console.error("Missing hole data");
+                
+                throw new Error("API returned incomplete course data");
               }
               
-              // Refresh updated course data
-              const { data: updatedCourse, error: refreshError } = await supabase
-                .from('courses')
-                .select('*')
-                .eq('id', existingCourse.id)
-                .single();
+              // Update course in database if needed
+              if (existingCourse) {
+                console.log(`Updating existing course: ${existingCourse.name}`);
                 
-              if (refreshError) {
-                console.error("Error fetching updated course:", refreshError);
-              } else {
-                existingCourse = updatedCourse;
-              }
-            } else if (apiCourseId) {
-              console.log(`Creating new course from API data: ${transformedCourse.name}`);
-              
-              // Insert new course
-              const { data: newCourse, error: insertError } = await supabase
-                .from('courses')
-                .insert({
+                // Merge data strategy - keep existing data for fields not present in API data
+                const mergedCourse = {
+                  ...existingCourse,
                   ...transformedCourse,
-                  created_at: now.toISOString()
-                })
-                .select()
-                .single();
+                  // Preserve ID
+                  id: existingCourse.id,
+                  // Preserve created_at
+                  created_at: existingCourse.created_at
+                };
                 
-              if (insertError) {
-                console.error("Error inserting course:", insertError);
-                throw new Error(`Database error inserting course: ${insertError.message}`);
+                const { error: updateError } = await supabase
+                  .from('courses')
+                  .update(mergedCourse)
+                  .eq('id', existingCourse.id);
+                  
+                if (updateError) {
+                  console.error("Error updating course:", updateError);
+                  throw new Error(`Database error updating course: ${updateError.message}`);
+                }
+                
+                // Refresh updated course data
+                const { data: updatedCourse, error: refreshError } = await supabase
+                  .from('courses')
+                  .select('*')
+                  .eq('id', existingCourse.id)
+                  .single();
+                  
+                if (refreshError) {
+                  console.error("Error fetching updated course:", refreshError);
+                } else {
+                  existingCourse = updatedCourse;
+                }
+              } else if (apiCourseId) {
+                console.log(`Creating new course from API data: ${transformedCourse.name}`);
+                
+                // Insert new course
+                const { data: newCourse, error: insertError } = await supabase
+                  .from('courses')
+                  .insert({
+                    ...transformedCourse,
+                    created_at: now.toISOString()
+                  })
+                  .select()
+                  .single();
+                  
+                if (insertError) {
+                  console.error("Error inserting course:", insertError);
+                  throw new Error(`Database error inserting course: ${insertError.message}`);
+                }
+                
+                existingCourse = newCourse;
               }
-              
-              existingCourse = newCourse;
+            } else {
+              console.error("API response missing essential course data", apiData);
+              throw new Error("API returned invalid course data structure");
             }
           } else {
             console.error("API response missing course data", apiData);
@@ -368,3 +387,40 @@ serve(async (req) => {
     );
   }
 });
+
+/**
+ * Helper function to calculate total distance from tee data
+ */
+function calculateTotalDistance(tee) {
+  let total = 0;
+  const holeCount = 18; // Standard number of holes
+  
+  for (let i = 1; i <= holeCount; i++) {
+    const distance = tee[`length${i}`];
+    if (distance && !isNaN(parseInt(distance, 10))) {
+      total += parseInt(distance, 10);
+    }
+  }
+  
+  return total > 0 ? total : null;
+}
+
+/**
+ * Helper function to calculate course par from par data
+ */
+function calculateCoursePar(parData, numHoles) {
+  if (!parData || !Array.isArray(parData)) {
+    return 72; // Default par for standard course
+  }
+  
+  let totalPar = 0;
+  const effectiveHoles = Math.min(parData.length, numHoles);
+  
+  for (let i = 0; i < effectiveHoles; i++) {
+    if (parData[i] && !isNaN(parseInt(parData[i], 10))) {
+      totalPar += parseInt(parData[i], 10);
+    }
+  }
+  
+  return totalPar > 0 ? totalPar : 72;
+}
