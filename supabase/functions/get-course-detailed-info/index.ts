@@ -201,64 +201,121 @@ serve(async (req) => {
                 lng: parseFloat(coord.longitude)
               };
               
-              // Map the POI values to feature types
-              // POI codes are documented in the Golf API spec but we need to map them to our domain model
+              // Map the POI values to feature types using the corrected mapping
               switch(coord.poi) {
-                case 1: // Tee
+                case 1: // Green
                   // Determine location (front, middle, back)
-                  let teeLocation = 'default';
-                  if (coord.location === 1) teeLocation = 'front';
-                  else if (coord.location === 2) teeLocation = 'middle';
-                  else if (coord.location === 3) teeLocation = 'back';
+                  let greenLocation = 'center'; // Default location
+                  if (coord.location === 1) greenLocation = 'front';
+                  else if (coord.location === 3) greenLocation = 'back';
                   
-                  holePOIData.tees.push({
-                    ...point,
-                    location: teeLocation
-                  });
-                  break;
-                
-                case 11: // Green front
                   holePOIData.greens.push({
                     ...point,
-                    location: 'front'
+                    location: greenLocation
                   });
                   break;
                 
-                case 12: // Green center
-                  holePOIData.greens.push({
-                    ...point,
-                    location: 'center'
-                  });
-                  break;
-                
-                case 13: // Green back
-                  holePOIData.greens.push({
-                    ...point,
-                    location: 'back'
-                  });
-                  break;
-                
-                case 3: case 4: // Bunkers
-                  // Determine side (left, right, center)
-                  let side = 'center';
-                  if (coord.sideFW === 1) side = 'left';
-                  else if (coord.sideFW === 3) side = 'right';
+                case 2: // Green Bunker
+                  let gbSide = 'center';
+                  let gbLocation = 'middle';
+                  
+                  if (coord.sideFW === 1) gbSide = 'left';
+                  else if (coord.sideFW === 3) gbSide = 'right';
+                  
+                  if (coord.location === 1) gbLocation = 'front';
+                  else if (coord.location === 3) gbLocation = 'back';
                   
                   holePOIData.bunkers.push({
                     ...point,
-                    side,
-                    type: coord.poi === 3 ? 'greenside' : 'fairway'
+                    side: gbSide,
+                    location: gbLocation,
+                    type: 'green'
                   });
                   break;
                 
-                case 5: case 6: case 7: // Water hazards
+                case 3: // Fairway Bunker
+                  let fbSide = 'center';
+                  let fbLocation = 'middle';
+                  
+                  if (coord.sideFW === 1) fbSide = 'left';
+                  else if (coord.sideFW === 3) fbSide = 'right';
+                  
+                  if (coord.location === 1) fbLocation = 'front';
+                  else if (coord.location === 3) fbLocation = 'back';
+                  
+                  holePOIData.bunkers.push({
+                    ...point,
+                    side: fbSide,
+                    location: fbLocation,
+                    type: 'fairway'
+                  });
+                  break;
+                
+                case 4: // Water
                   holePOIData.hazards.push({
                     ...point,
                     type: 'water'
                   });
                   break;
                 
-                // Add more mappings as needed for other POI types
+                case 5: // Trees
+                  holePOIData.hazards.push({
+                    ...point,
+                    type: 'trees'
+                  });
+                  break;
+                
+                case 6: // 100 Marker
+                  holePOIData.hazards.push({
+                    ...point,
+                    type: 'distance_marker',
+                    distance: 100
+                  });
+                  break;
+                
+                case 7: // 150 Marker
+                  holePOIData.hazards.push({
+                    ...point,
+                    type: 'distance_marker',
+                    distance: 150
+                  });
+                  break;
+                
+                case 8: // 200 Marker
+                  holePOIData.hazards.push({
+                    ...point,
+                    type: 'distance_marker',
+                    distance: 200
+                  });
+                  break;
+                
+                case 9: // Dogleg
+                  holePOIData.hazards.push({
+                    ...point,
+                    type: 'dogleg'
+                  });
+                  break;
+                
+                case 10: // Road
+                  holePOIData.hazards.push({
+                    ...point,
+                    type: 'road'
+                  });
+                  break;
+                
+                case 11: // Front Tee
+                  holePOIData.tees.push({
+                    ...point,
+                    location: 'front'
+                  });
+                  break;
+                
+                case 12: // Back Tee
+                  holePOIData.tees.push({
+                    ...point,
+                    location: 'back'
+                  });
+                  break;
               }
             });
             

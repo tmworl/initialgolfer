@@ -114,7 +114,7 @@ serve(async (req) => {
       // Search database first
       let query = supabase
         .from('courses')
-        .select('id, name, club_name, location, tees, country, num_holes');
+        .select('id, name, club_name, location, tees, poi, country, num_holes');
       
       // Apply search filter with case-insensitive pattern matching
       query = query.or(`name.ilike.%${searchQuery}%,location.ilike.%${searchQuery}%,club_name.ilike.%${searchQuery}%`);
@@ -128,7 +128,10 @@ serve(async (req) => {
           ...course,
           has_tee_data: course.tees !== null && 
                       Array.isArray(course.tees) && 
-                      course.tees.length > 0
+                      course.tees.length > 0,
+          has_poi_data: course.poi !== null && 
+                      Array.isArray(course.poi) && 
+                      course.poi.length > 0
         }));
         console.log(`Found ${courses.length} courses in database`);
       }
@@ -162,29 +165,28 @@ serve(async (req) => {
             if (apiData.courses && Array.isArray(apiData.courses)) {
               // Transform API data to our DB schema
               const transformedCourses = apiData.courses
-                .filter(course => {
-                  // Filter out courses with generic names
+                .map(course => {
+                  // Log generic names but don't filter them out - allow them into the database
                   if (course.courseName === "18-hole course" || 
                       course.courseName === "9-hole course") {
-                    console.error(`Rejecting course with generic name: ${course.courseName}`);
-                    return false;
+                    console.log(`Generic Name Course Detected: ${course.courseName} for ${course.clubName}, ID: ${course.courseID}`);
                   }
-                  return true;
-                })
-                .map(course => ({
-                  name: course.courseName,
-                  api_course_id: course.courseID,
-                  club_name: course.clubName,
-                  location: `${course.city}, ${course.state}`,
-                  country: course.country,
-                  latitude: null,  // Will be populated with detailed info
-                  longitude: null, // Will be populated with detailed info
-                  num_holes: course.numHoles,
-                  par: null,       // Will be populated with detailed info
-                  tees: [],        // Will be populated with detailed info
-                  holes: [],       // Will be populated with detailed info
-                  updated_at: new Date(parseInt(course.timestampUpdated) * 1000).toISOString()
-                }));
+                  
+                  return {
+                    name: course.courseName,
+                    api_course_id: course.courseID,
+                    club_name: course.clubName,
+                    location: `${course.city}, ${course.state}`,
+                    country: course.country,
+                    latitude: null,  // Will be populated with detailed info
+                    longitude: null, // Will be populated with detailed info
+                    num_holes: course.numHoles,
+                    par: null,       // Will be populated with detailed info
+                    tees: [],        // Will be populated with detailed info
+                    holes: [],       // Will be populated with detailed info
+                    updated_at: new Date(parseInt(course.timestampUpdated) * 1000).toISOString()
+                  };
+                });
                 
               // Store the transformed courses in the database
               if (transformedCourses.length > 0) {
@@ -242,7 +244,7 @@ serve(async (req) => {
                 // Refresh the course list from database to include newly added courses
                 const { data: refreshedCourses, error: refreshError } = await supabase
                   .from('courses')
-                  .select('id, name, club_name, location, tees, country, num_holes')
+                  .select('id, name, club_name, location, tees, poi, country, num_holes')
                   .or(`name.ilike.%${searchQuery}%,location.ilike.%${searchQuery}%,club_name.ilike.%${searchQuery}%`)
                   .order('name')
                   .limit(limit);
@@ -252,7 +254,10 @@ serve(async (req) => {
                     ...course,
                     has_tee_data: course.tees !== null && 
                               Array.isArray(course.tees) && 
-                              course.tees.length > 0
+                              course.tees.length > 0,
+                    has_poi_data: course.poi !== null && 
+                              Array.isArray(course.poi) && 
+                              course.poi.length > 0
                   }));
                   console.log(`After API search: ${courses.length} courses available`);
                 }
@@ -297,7 +302,7 @@ serve(async (req) => {
       // If no search query, get popular courses
       const { data: popularCourses, error: popularError } = await supabase
         .from('courses')
-        .select('id, name, club_name, location, tees, country, num_holes')
+        .select('id, name, club_name, location, tees, poi, country, num_holes')
         .order('name')
         .limit(limit);
         
@@ -306,7 +311,10 @@ serve(async (req) => {
           ...course,
           has_tee_data: course.tees !== null && 
                       Array.isArray(course.tees) && 
-                      course.tees.length > 0
+                      course.tees.length > 0,
+          has_poi_data: course.poi !== null && 
+                      Array.isArray(course.poi) && 
+                      course.poi.length > 0
         }));
         console.log(`Found ${courses.length} popular courses`);
       }
