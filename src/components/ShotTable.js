@@ -1,7 +1,13 @@
 // src/components/ShotTable.js
+//
+// Migration from direct Text components to Typography system
+// This component is a revenue-critical interface as it directly captures the data
+// that drives our AI insights and premium feature upsell opportunities.
 
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from "react-native";
+import { View, TouchableOpacity, StyleSheet, Dimensions } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import Typography from "../ui/components/Typography";
 import theme from "../ui/theme";
 
 // Define shot types and outcomes with color coding
@@ -15,11 +21,24 @@ const screenWidth = Dimensions.get('window').width;
  * ShotTable Component
  * 
  * Displays a table of shot types and outcomes for tracking golf shots.
- * Features color-coded outcome headers and optimized layout.
+ * This is a core data collection interface that directly feeds our analytics
+ * engine and premium insights feature, making visual clarity and intuitive
+ * interaction essential to high-quality data collection that drives conversion.
+ * 
+ * @param {Object} props
+ * @param {Object} props.shotCounts - Current shot count data
+ * @param {string} props.activeColumn - Currently selected outcome column
+ * @param {Function} props.setActiveColumn - Function to set active column
+ * @param {Function} props.addShot - Function to add a shot
+ * @param {Function} props.removeShot - Function to remove a shot
  */
 export default function ShotTable({ shotCounts, activeColumn, setActiveColumn, addShot, removeShot }) {
   if (!shotCounts) {
-    return <View><Text>Unable to display shot data</Text></View>;
+    return (
+      <View>
+        <Typography variant="body">Unable to display shot data</Typography>
+      </View>
+    );
   }
 
   // Function to get color for outcome column headers
@@ -41,7 +60,9 @@ export default function ShotTable({ shotCounts, activeColumn, setActiveColumn, a
       {/* Header Row */}
       <View style={styles.headerRow}>
         <View style={styles.shotTypeCell}>
-          <Text style={styles.headerText}>Shot Type</Text>
+          <Typography variant="body" weight="bold" style={styles.headerText}>
+            Shot Type
+          </Typography>
         </View>
         
         {/* Outcome Headers with color coding */}
@@ -56,14 +77,17 @@ export default function ShotTable({ shotCounts, activeColumn, setActiveColumn, a
               { backgroundColor: activeColumn === outcome ? getOutcomeColor(outcome) : '#f5f5f5' }
             ]}
           >
-            <Text style={[
-              styles.headerText,
-              activeColumn === outcome ? styles.activeHeaderText : null,
-              // Smaller font for Recovery Needed
-              outcome === "Recovery Needed" ? styles.smallerHeaderText : null
-            ]}>
+            <Typography 
+              variant="body" 
+              weight={activeColumn === outcome ? "bold" : "normal"}
+              style={[
+                styles.headerText,
+                // Smaller font for Recovery Needed
+                outcome === "Recovery Needed" ? styles.smallerHeaderText : null
+              ]}
+            >
               {outcome}
-            </Text>
+            </Typography>
           </TouchableOpacity>
         ))}
       </View>
@@ -73,7 +97,9 @@ export default function ShotTable({ shotCounts, activeColumn, setActiveColumn, a
         <View key={type} style={styles.dataRow}>
           {/* Shot Type */}
           <View style={styles.shotTypeCell}>
-            <Text style={styles.shotTypeText}>{type}</Text>
+            <Typography variant="body" weight="medium" style={styles.shotTypeText}>
+              {type}
+            </Typography>
           </View>
           
           {/* Outcome Cells */}
@@ -105,25 +131,29 @@ export default function ShotTable({ shotCounts, activeColumn, setActiveColumn, a
                       disabled={count === 0}
                       style={[styles.button, count === 0 && styles.disabledButton]}
                     >
-                      <Text style={styles.buttonText}>-</Text>
+                      <Typography variant="button" color="#fff" style={styles.buttonText}>-</Typography>
                     </TouchableOpacity>
                     
-                    <Text style={styles.countText}>{count}</Text>
+                    <Typography variant="body" weight="bold" style={styles.countText}>
+                      {count}
+                    </Typography>
                     
                     <TouchableOpacity
                       onPress={() => addShot(type, outcome)}
                       style={styles.button}
                     >
-                      <Text style={styles.buttonText}>+</Text>
+                      <Typography variant="button" color="#fff" style={styles.buttonText}>+</Typography>
                     </TouchableOpacity>
                   </View>
                 ) : (
-                  <Text style={[
-                    styles.countValueText,
-                    count > 0 && styles.highlightedCountText
-                  ]}>
+                  <Typography 
+                    variant={count > 0 ? "body" : "body"}
+                    weight={count > 0 ? "bold" : "normal"}
+                    color={count > 0 ? theme.colors.primary : null}
+                    style={styles.countValueText}
+                  >
                     {count}
-                  </Text>
+                  </Typography>
                 )}
               </TouchableOpacity>
             );
@@ -176,19 +206,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f8f8',
   },
   headerText: {
-    fontWeight: 'bold',
-    fontSize: 14, // Reduced from 15 for better fit
     textAlign: 'center',
   },
   smallerHeaderText: {
     fontSize: 12, // Even smaller for long text
   },
-  activeHeaderText: {
-    color: theme.colors.primary,
-  },
   shotTypeText: {
     fontSize: 14, // Reduced from 16
-    fontWeight: '500',
   },
   controlsContainer: {
     flexDirection: 'row',
@@ -210,23 +234,18 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   buttonText: {
-    color: "#fff",
     fontSize: 18, // Reduced from 20
-    fontWeight: "bold",
   },
   countText: {
     fontSize: 16, // Reduced from 18
-    fontWeight: "bold",
     textAlign: "center",
     minWidth: 30, // Reduced from 35
   },
   countValueText: {
     fontSize: 14, // Reduced from 16
-    fontWeight: "500",
   },
   highlightedCountText: {
     fontSize: 16, // Reduced from 18
-    fontWeight: "bold",
     color: theme.colors.primary,
   }
 });

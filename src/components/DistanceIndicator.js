@@ -1,8 +1,8 @@
 // src/components/DistanceIndicator.js
 //
-// This component provides a real-time distance indicator that shows distances to
-// front, center, and back of the green based on the user's GPS position.
-// It handles its own permission requesting and GPS monitoring lifecycle.
+// Migration from mixed Text/Typography implementation to consistent Typography usage
+// This enhances the premium perception of GPS distance features by aligning with our design system
+// and creates a more monetizable premium experience.
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
@@ -15,6 +15,8 @@ import theme from '../ui/theme';
  * Distance Indicator Component
  * 
  * Shows distances to the green based on GPS or falls back to static hole data.
+ * This is a premium feature with high visibility in the user experience, making
+ * consistent visual presentation critical for perceived value.
  * 
  * @param {Object} props
  * @param {Object} props.holeData - Current hole data with distance and poi info
@@ -304,7 +306,7 @@ const DistanceIndicator = ({
         
         {/* Center distance (most prominent) */}
         <View style={styles.mainDistanceContainer}>
-          <Typography variant="subtitle" bold style={styles.mainDistance}>
+          <Typography variant="subtitle" weight="bold" style={styles.mainDistance}>
             {centerDistance || holeData.distance || '---'}
           </Typography>
           <Typography variant="caption" style={styles.distanceLabel}>

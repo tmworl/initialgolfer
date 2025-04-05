@@ -4,7 +4,6 @@ import React, { useState, useEffect, useContext, useCallback } from "react";
 import { 
   View, 
   Text, 
-  Button, 
   StyleSheet, 
   Alert, 
   ActivityIndicator, 
@@ -12,7 +11,10 @@ import {
   SafeAreaView,
   BackHandler,
   TouchableOpacity
-} from "react-native";
+} from "react-native"; // Remove Button from here
+
+// Add this import for your design system Button
+import Button from "../ui/components/Button";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Layout from "../ui/Layout";
 import theme from "../ui/theme";
@@ -620,11 +622,15 @@ export default function TrackerScreen({ navigation }) {
             
             {/* Button to complete current hole or the entire round */}
             <View style={styles.buttonContainer}>
-              <Button 
-                title={currentHole === totalHoles ? "Complete Round" : "Complete Hole"} 
+              <Button
+                variant="primary"
+                size="large"
+                fullWidth
                 onPress={currentHole === totalHoles ? finishRound : completeHole}
-                color={theme.colors.primary} 
-              />
+                loading={loading}
+              >
+                {currentHole === totalHoles ? "Complete Round" : "Complete Hole"}
+              </Button>
             </View>
           </View>
         )}
@@ -709,7 +715,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   buttonContainer: {
-    marginBottom: 8,
-    paddingHorizontal: 8,
+    marginBottom: theme.spacing.medium,
+    paddingHorizontal: theme.spacing.medium,
   }
 });
