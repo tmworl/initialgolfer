@@ -68,7 +68,7 @@ export default function CourseSelectorScreen({ navigation }) {
       } else {
         setSearchResults([]);
       }
-    }, 400),
+    }, 1000),
     []
   );
   

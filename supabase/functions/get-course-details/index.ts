@@ -1,7 +1,51 @@
-// supabase/functions/get-course-details/index.ts
+// supabase/functions/get-courses/index.ts
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.31.0';
+
+/**
+ * =========================================================================
+ * SERVER-SIDE SEARCH PREPROCESSING ENGINE
+ * =========================================================================
+ * This preprocessing pipeline transforms raw search queries to enhance recall
+ * while reducing redundant API calls. Maintains a clear separation between
+ * input standardization and database interaction layers.
+ */
+function preprocessSearchQuery(originalQuery: string): string {
+  console.log(`[SERVER PREPROCESS] Original query: "${originalQuery}"`);
+  
+  // STEP 1: Remove leading articles (the, a, an)
+  let processed = originalQuery.replace(/^(the|a|an)\s+/i, '');
+  
+  // STEP 2: Filter out domain-specific noise terms 
+  // ===== MODIFY THIS ARRAY TO ADJUST FILTERING STRATEGY =====
+  const NOISE_TERMS = [
+    'golf',
+    'course',
+    'club',
+    'cc',
+    'country',
+    'links'
+  ];
+  
+  // Split into discrete tokens
+  let tokens = processed.split(/\s+/);
+  
+  // Filter out noise terms while preserving meaningful identifiers
+  tokens = tokens.filter(term => !NOISE_TERMS.includes(term.toLowerCase()));
+  
+  // Preserve query integrity - use original if filtering would leave nothing
+  if (tokens.length === 0) {
+    console.log(`[SERVER PREPROCESS] Filtering removed all terms, reverting to original`);
+    return originalQuery;
+  }
+  
+  // Reconstruct the processed query
+  processed = tokens.join(' ');
+  
+  console.log(`[SERVER PREPROCESS] Processed query: "${processed}"`);
+  return processed;
+}
 
 serve(async (req) => {
   // Handle OPTIONS for CORS preflight
@@ -32,345 +76,338 @@ serve(async (req) => {
     // Create Supabase client with service role key
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     
-    // Parse URL to get course ID from path or query param
+    // Parse URL to get query parameters
     const url = new URL(req.url);
+    const searchQuery = url.searchParams.get('query') || '';
+    const userId = url.searchParams.get('userId') || '';
+    const limit = parseInt(url.searchParams.get('limit') || '20', 10);
+    const noRecent = url.searchParams.get('noRecent') === 'true';
     
-    // First try to get ID from path
-    const pathParts = url.pathname.split('/');
-    let courseId = pathParts[pathParts.length - 1];
+    // Get authorization header for user context
+    const authHeader = req.headers.get('Authorization');
+    let userFromAuth = null;
     
-    // If not in path, try query param
-    if (courseId === 'get-course-details') {
-      courseId = url.searchParams.get('courseId') || '';
-    }
-    
-    // Validate course ID is provided
-    if (!courseId) {
-      return new Response(
-        JSON.stringify({ error: "Course ID is required" }),
-        { 
-          status: 400, 
-          headers: { 
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*"
-          } 
-        }
-      );
-    }
-    
-    // Force refresh parameter (optional)
-    const forceRefresh = url.searchParams.get('refresh') === 'true';
-    
-    // Get the current timestamp
-    const now = new Date();
-    
-    // Define data freshness threshold (90 days in milliseconds)
-    const FRESHNESS_THRESHOLD_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
-    
-    // First, try to get course from database
-    let { data: existingCourse, error: dbError } = await supabase
-      .from('courses')
-      .select('*')
-      .eq('id', courseId)
-      .single();
-      
-    if (dbError && dbError.code !== 'PGRST116') { // Not found error is acceptable
-      console.error("Database error fetching course:", dbError);
-    }
-    
-    // Check if we need to fetch from API
-    let needsApiRefresh = false;
-    let apiCourseId = null;
-    
-    if (!existingCourse) {
-      console.log(`Course ${courseId} not found in database`);
-      needsApiRefresh = true;
-    } else {
-      console.log(`Found course ${existingCourse.name} in database`);
-      
-      // Store API course ID for potential API call
-      apiCourseId = existingCourse.api_course_id;
-      
-      // Check if course has complete tee and hole data
-      const hasTeeData = existingCourse.tees && 
-                         Array.isArray(existingCourse.tees) && 
-                         existingCourse.tees.length > 0;
-                         
-      const hasHoleData = existingCourse.holes && 
-                          Array.isArray(existingCourse.holes) && 
-                          existingCourse.holes.length > 0;
-                          
-      // Check data freshness
-      let dataStale = false;
-      if (existingCourse.updated_at) {
-        const lastUpdateTime = new Date(existingCourse.updated_at).getTime();
-        const staleDuration = now.getTime() - lastUpdateTime;
-        dataStale = staleDuration > FRESHNESS_THRESHOLD_MS;
-        
-        if (dataStale) {
-          console.log(`Course data is stale, last updated ${Math.floor(staleDuration / (24 * 60 * 60 * 1000))} days ago`);
-        }
-      }
-      
-      // Determine if we need to refresh from API
-      needsApiRefresh = forceRefresh || !hasTeeData || !hasHoleData || dataStale;
-    }
-    
-    // If we need API data and have the API key + course ID
-    if (needsApiRefresh && GOLF_API_KEY && apiCourseId) {
-      console.log(`Fetching course details from API for ${apiCourseId}`);
-      
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.replace('Bearer ', '');
       try {
-        // Make API call to get course details
-        const apiUrl = `https://www.golfapi.io/api/v2.3/courses/${apiCourseId}`;
-        const apiResponse = await fetch(apiUrl, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${GOLF_API_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          redirect: 'follow'
+        const { data: userData, error: authError } = await supabase.auth.getUser(token);
+        if (!authError && userData) {
+          userFromAuth = userData.user;
+        }
+      } catch (e) {
+        console.error("Auth validation error:", e);
+      }
+    }
+    
+    // Determine effective user ID
+    const effectiveUserId = userId || userFromAuth?.id;
+    
+    // Initialize results containers
+    let courses = [];
+    let recentCourses = [];
+    let apiSearchPerformed = false;
+    let apiSearchError = null;
+    
+    // CASE 1: Recent Courses (if userId provided and not explicitly skipped)
+    if (effectiveUserId && !noRecent) {
+      const { data: recentData, error: recentError } = await supabase
+        .from('rounds')
+        .select(`
+          course_id,
+          created_at,
+          courses:course_id (
+            id, 
+            name, 
+            club_name, 
+            location, 
+            tees,
+            poi
+          )
+        `)
+        .eq('profile_id', effectiveUserId)
+        .eq('is_complete', true)
+        .order('created_at', { ascending: false });
+        
+      if (!recentError && recentData) {
+        // Extract unique courses from recent rounds
+        const uniqueCourseIds = [];
+        const uniqueRecentCourses = [];
+        
+        recentData.forEach(round => {
+          if (round.courses && !uniqueCourseIds.includes(round.courses.id)) {
+            uniqueCourseIds.push(round.courses.id);
+            
+            // Add has_tee_data flag
+            uniqueRecentCourses.push({
+              ...round.courses,
+              has_tee_data: round.courses.tees !== null && 
+                          Array.isArray(round.courses.tees) && 
+                          round.courses.tees.length > 0,
+              has_poi_data: round.courses.poi !== null && 
+                          Array.isArray(round.courses.poi) && 
+                          round.courses.poi.length > 0
+            });
+          }
         });
         
-        if (apiResponse.ok) {
-          // Parse API response
-          const apiData = await apiResponse.json();
-          
-          // Log the raw API response for diagnostic purposes
-          console.log(`[get-course-details] Raw API response structure for ${apiCourseId}:`, 
-            JSON.stringify({
-              responseKeys: Object.keys(apiData),
-              hasCourse: !!apiData.course,
-              hasTees: !!(apiData.tees || (apiData.course && apiData.course.tees)),
-              teesCount: (apiData.tees || (apiData.course && apiData.course.tees) || []).length
-            })
-          );
-          
-          // Modified logic to handle both root-level and nested course structures
-          if (apiData) {
-            // Extract course data from either nested or root format
-            const course = apiData.course || 
-                         (apiData.tees && apiData.courseName ? apiData : null);
-            
-            if (course && (course.tees || []).length > 0) {
-              console.log("Successfully extracted course data with tees");
-              
-              // Transform tees data
-              const transformedTees = [];
-              if (course.tees && Array.isArray(course.tees)) {
-                course.tees.forEach(tee => {
-                  transformedTees.push({
-                    id: tee.teeID || `tee_${transformedTees.length + 1}`,
-                    name: tee.teeName || "Unnamed",
-                    color: tee.teeColor || "#CCCCCC",
-                    slope_men: tee.slopeMen || null,
-                    slope_women: tee.slopeWomen || null,
-                    course_rating_men: tee.courseRatingMen || null,
-                    course_rating_women: tee.courseRatingWomen || null,
-                    total_distance: calculateTotalDistance(tee) || null
-                  });
-                });
-              }
-              
-              // Transform holes data
-              const transformedHoles = [];
-              const parsMen = course.parsMen || [];
-              const parsWomen = course.parsWomen || [];
-              const indexesMen = course.indexesMen || [];
-              const indexesWomen = course.indexesWomen || [];
-              
-              // Process individual holes
-              const numHoles = parseInt(course.numHoles || "18", 10);
-              for (let i = 1; i <= numHoles; i++) {
-                // Create distances object mapped by tee name
-                const distances = {};
-                if (course.tees && Array.isArray(course.tees)) {
-                  course.tees.forEach(tee => {
-                    const holeDistance = tee[`length${i}`];
-                    if (holeDistance) {
-                      distances[tee.teeName.toLowerCase()] = parseInt(holeDistance, 10);
-                    }
-                  });
-                }
-                
-                transformedHoles.push({
-                  number: i,
-                  par_men: parsMen[i-1] || null,
-                  par_women: parsWomen[i-1] || null,
-                  index_men: indexesMen[i-1] || null,
-                  index_women: indexesWomen[i-1] || null,
-                  distances: distances
-                });
-              }
-              
-              // Create transformed course data
-              const transformedCourse = {
-                name: course.courseName || course.name,
-                api_course_id: course.courseID || course.id,
-                club_name: course.clubName || "",
-                location: `${course.city || ""}, ${course.state || ""}`.trim(),
-                country: course.country || "",
-                latitude: course.latitude || null,
-                longitude: course.longitude || null,
-                num_holes: parseInt(course.numHoles || "18", 10),
-                par: calculateCoursePar(parsMen, numHoles),
-                tees: transformedTees,
-                holes: transformedHoles,
-                updated_at: now.toISOString()
-              };
-              
-              // Validate transformed data meets minimum requirements
-              const isValid = 
-                transformedCourse.name && 
-                transformedCourse.par && 
-                transformedTees.length > 0 && 
-                transformedHoles.length > 0;
-                
-              if (!isValid) {
-                console.error("Transformed course data is incomplete");
-                // Log specific validation failures
-                if (!transformedCourse.name) console.error("Missing course name");
-                if (!transformedCourse.par) console.error("Missing course par");
-                if (transformedTees.length === 0) console.error("Missing tee data");
-                if (transformedHoles.length === 0) console.error("Missing hole data");
-                
-                throw new Error("API returned incomplete course data");
-              }
-              
-              // Update course in database if needed
-              if (existingCourse) {
-                console.log(`Updating existing course: ${existingCourse.name}`);
-                
-                // Merge data strategy - keep existing data for fields not present in API data
-                const mergedCourse = {
-                  ...existingCourse,
-                  ...transformedCourse,
-                  // Preserve ID
-                  id: existingCourse.id,
-                  // Preserve created_at
-                  created_at: existingCourse.created_at
-                };
-                
-                const { error: updateError } = await supabase
-                  .from('courses')
-                  .update(mergedCourse)
-                  .eq('id', existingCourse.id);
-                  
-                if (updateError) {
-                  console.error("Error updating course:", updateError);
-                  throw new Error(`Database error updating course: ${updateError.message}`);
-                }
-                
-                // Refresh updated course data
-                const { data: updatedCourse, error: refreshError } = await supabase
-                  .from('courses')
-                  .select('*')
-                  .eq('id', existingCourse.id)
-                  .single();
-                  
-                if (refreshError) {
-                  console.error("Error fetching updated course:", refreshError);
-                } else {
-                  existingCourse = updatedCourse;
-                }
-              } else if (apiCourseId) {
-                console.log(`Creating new course from API data: ${transformedCourse.name}`);
-                
-                // Insert new course
-                const { data: newCourse, error: insertError } = await supabase
-                  .from('courses')
-                  .insert({
-                    ...transformedCourse,
-                    created_at: now.toISOString()
-                  })
-                  .select()
-                  .single();
-                  
-                if (insertError) {
-                  console.error("Error inserting course:", insertError);
-                  throw new Error(`Database error inserting course: ${insertError.message}`);
-                }
-                
-                existingCourse = newCourse;
-              }
-            } else {
-              console.error("API response missing essential course data", apiData);
-              throw new Error("API returned invalid course data structure");
-            }
-          } else {
-            console.error("API response missing course data", apiData);
-            throw new Error("API returned invalid course data structure");
-          }
-        } else {
-          // Handle API error
-          const errorStatus = apiResponse.status;
-          let errorMessage = `API returned status ${errorStatus}`;
-          
-          try {
-            const errorBody = await apiResponse.text();
-            console.error(`API error (${errorStatus}): ${errorBody}`);
-            
-            // Check for auth errors specifically
-            if (errorStatus === 401 || errorStatus === 403) {
-              console.error("Golf API authentication error - please check API key");
-            }
-            
-            throw new Error(`API error: ${errorStatus} - ${errorBody}`);
-          } catch (parseError) {
-            console.error(`Could not parse error response: ${parseError}`);
-            throw new Error(`API error: ${errorStatus}`);
-          }
-        }
-      } catch (apiError) {
-        console.error(`Exception in API processing: ${apiError}`);
-        
-        // If we have existing course data, return it despite the API error
-        if (existingCourse) {
-          console.log("Returning existing course data despite API error");
-          // Continue execution and return existing data
-        } else {
-          throw apiError; // Re-throw if we have no fallback data
-        }
+        recentCourses = uniqueRecentCourses.slice(0, limit);
+        console.log(`Found ${recentCourses.length} recent courses for user`);
       }
     }
     
-    // If we still don't have course data, report error
-    if (!existingCourse) {
-      return new Response(
-        JSON.stringify({ 
-          error: "Course not found",
-          courseId
-        }),
-        { 
-          status: 404, 
-          headers: { 
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*"
-          } 
+    // CASE 2: Search Query (if provided)
+    if (searchQuery.length >= 3) {
+      // Apply preprocessing to the search query
+      const processedQuery = preprocessSearchQuery(searchQuery);
+      console.log(`Executing search with processed query: "${processedQuery}"`);
+      
+      // Search database first
+      let query = supabase
+        .from('courses')
+        .select('id, name, club_name, location, tees, poi, country, num_holes');
+      
+      // Apply search filter with case-insensitive pattern matching using processed query
+      query = query.or(`name.ilike.%${processedQuery}%,location.ilike.%${processedQuery}%,club_name.ilike.%${processedQuery}%`);
+      
+      const { data: dbCourses, error: dbError } = await query
+        .order('name')
+        .limit(limit);
+        
+      if (!dbError && dbCourses) {
+        courses = dbCourses.map(course => ({
+          ...course,
+          has_tee_data: course.tees !== null && 
+                      Array.isArray(course.tees) && 
+                      course.tees.length > 0,
+          has_poi_data: course.poi !== null && 
+                      Array.isArray(course.poi) && 
+                      course.poi.length > 0
+        }));
+        console.log(`Database query returned ${courses.length} courses`);
+      }
+      
+      // Fall back to API only when database has insufficient results (< 1)
+      // This represents a strategic architectural decision to minimize API usage
+      if (courses.length < 1 && GOLF_API_KEY) {
+        apiSearchPerformed = true;
+        console.log("Insufficient database results, calling external API");
+        
+        try {
+          // Apply preprocessing to API query as well
+          // Store original for analytics correlation
+          const originalApiQuery = searchQuery;
+          const processedApiQuery = processedQuery;
+          
+          // Construct API URL for Golf API using processed query
+          const apiUrl = `https://www.golfapi.io/api/v2.3/courses?name=${encodeURIComponent(processedApiQuery)}`;
+          
+          // Call Golf API with Bearer token authentication
+          const apiResponse = await fetch(apiUrl, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${GOLF_API_KEY}`,
+              'Content-Type': 'application/json'
+            },
+            redirect: 'follow'
+          });
+          
+          if (apiResponse.ok) {
+            const apiData = await apiResponse.json();
+            console.log(`API returned ${apiData.numCourses} courses`);
+            
+            if (apiData.courses && Array.isArray(apiData.courses)) {
+              // Transform API data to our DB schema
+              const transformedCourses = apiData.courses
+                .map(course => {
+                  // Log generic names but don't filter them out - allow them into the database
+                  if (course.courseName === "18-hole course" || 
+                      course.courseName === "9-hole course") {
+                    console.log(`Generic Name Course Detected: ${course.courseName} for ${course.clubName}, ID: ${course.courseID}`);
+                  }
+                  
+                  return {
+                    name: course.courseName,
+                    api_course_id: course.courseID,
+                    club_name: course.clubName,
+                    location: `${course.city}, ${course.state}`,
+                    country: course.country,
+                    latitude: null,  // Will be populated with detailed info
+                    longitude: null, // Will be populated with detailed info
+                    num_holes: course.numHoles,
+                    par: null,       // Will be populated with detailed info
+                    tees: [],        // Will be populated with detailed info
+                    holes: [],       // Will be populated with detailed info
+                    updated_at: new Date(parseInt(course.timestampUpdated) * 1000).toISOString()
+                  };
+                });
+                
+              // Strategic persistence approach: store API results for future queries
+              if (transformedCourses.length > 0) {
+                console.log(`Persisting ${transformedCourses.length} courses from API to database`);
+                
+                // Process each course individually for better error resilience
+                for (const course of transformedCourses) {
+                  // Check if course already exists
+                  const { data: existingCourse, error: existingError } = await supabase
+                    .from('courses')
+                    .select('id')
+                    .eq('api_course_id', course.api_course_id)
+                    .maybeSingle();
+                    
+                  if (existingError) {
+                    console.error(`Error checking for existing course: ${existingError.message}`);
+                    continue;
+                  }
+                  
+                  if (existingCourse) {
+                    // Update existing course
+                    const { error: updateError } = await supabase
+                      .from('courses')
+                      .update({
+                        name: course.name,
+                        club_name: course.club_name,
+                        location: course.location,
+                        country: course.country,
+                        num_holes: course.num_holes,
+                        updated_at: course.updated_at
+                      })
+                      .eq('id', existingCourse.id);
+                      
+                    if (updateError) {
+                      console.error(`Error updating course: ${updateError.message}`);
+                    } else {
+                      console.log(`Updated course: ${course.name}`);
+                    }
+                  } else {
+                    // Insert new course
+                    const { data: insertedCourse, error: insertError } = await supabase
+                      .from('courses')
+                      .insert({
+                        ...course,
+                        created_at: new Date().toISOString()
+                      })
+                      .select()
+                      .single();
+                      
+                    if (insertError) {
+                      console.error(`Error inserting course: ${insertError.message}`);
+                    } else {
+                      console.log(`Inserted new course: ${course.name}`);
+                    }
+                  }
+                }
+                
+                // Refresh results to include newly added courses
+                const refreshQuery = `name.ilike.%${processedQuery}%,location.ilike.%${processedQuery}%,club_name.ilike.%${processedQuery}%`;
+                console.log(`Refreshing results with query: ${refreshQuery}`);
+                
+                const { data: refreshedCourses, error: refreshError } = await supabase
+                  .from('courses')
+                  .select('id, name, club_name, location, tees, poi, country, num_holes')
+                  .or(refreshQuery)
+                  .order('name')
+                  .limit(limit);
+                  
+                if (!refreshError && refreshedCourses) {
+                  courses = refreshedCourses.map(course => ({
+                    ...course,
+                    has_tee_data: course.tees !== null && 
+                              Array.isArray(course.tees) && 
+                              course.tees.length > 0,
+                    has_poi_data: course.poi !== null && 
+                              Array.isArray(course.poi) && 
+                              course.poi.length > 0
+                  }));
+                  console.log(`After API integration: ${courses.length} courses available`);
+                }
+              }
+            } else {
+              console.error("API returned unexpected data structure:", apiData);
+              apiSearchError = "Unexpected API response format";
+            }
+          } else {
+            // Handle API error
+            const errorStatus = apiResponse.status;
+            let errorMessage = `API returned status ${errorStatus}`;
+            
+            try {
+              const errorBody = await apiResponse.text();
+              console.error(`API error (${errorStatus}): ${errorBody}`);
+              
+              // Check for auth errors specifically
+              if (errorStatus === 401 || errorStatus === 403) {
+                apiSearchError = "API authentication failed";
+                console.error("Golf API authentication error - please check API key");
+              } else {
+                apiSearchError = `API error: ${errorStatus}`;
+              }
+              
+              // Log the full error for debugging
+              console.error(`Full API error response: ${errorBody}`);
+              
+            } catch (parseError) {
+              console.error(`Could not parse error response: ${parseError}`);
+              apiSearchError = `API error: ${errorStatus}`;
+            }
+          }
+        } catch (apiError) {
+          console.error(`Exception calling Golf API: ${apiError}`);
+          apiSearchError = "API connection error";
         }
-      );
+      }
+    } else if (searchQuery.length > 0 && searchQuery.length < 3) {
+      console.log(`Search query too short (${searchQuery.length} chars): "${searchQuery}"`);
+    } else if (searchQuery.length === 0) {
+      // If no search query, get popular courses
+      const { data: popularCourses, error: popularError } = await supabase
+        .from('courses')
+        .select('id, name, club_name, location, tees, poi, country, num_holes')
+        .order('name')
+        .limit(limit);
+        
+      if (!popularError && popularCourses) {
+        courses = popularCourses.map(course => ({
+          ...course,
+          has_tee_data: course.tees !== null && 
+                      Array.isArray(course.tees) && 
+                      course.tees.length > 0,
+          has_poi_data: course.poi !== null && 
+                      Array.isArray(course.poi) && 
+                      course.poi.length > 0
+        }));
+        console.log(`Found ${courses.length} popular courses`);
+      }
     }
     
-    // Add metadata about data freshness
-    const responseData = {
-      ...existingCourse,
-      has_complete_data: !!(existingCourse.tees?.length > 0 && existingCourse.holes?.length > 0),
-      data_refreshed: needsApiRefresh
+    // Prepare response
+    const response = {
+      courses,
+      apiSearchPerformed,
+      apiSearchError,
+      totalResults: courses.length,
+      searchQuery: searchQuery || null
     };
     
-    // Return the course data
+    // Add recent courses if available
+    if (recentCourses.length > 0) {
+      response.recentCourses = recentCourses;
+    }
+    
+    // Return results
     return new Response(
-      JSON.stringify(responseData),
+      JSON.stringify(response),
       { 
         headers: { 
           "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*"
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization, x-client-info, apikey"
         } 
       }
     );
     
   } catch (error) {
-    console.error(`Error in get-course-details function: ${error}`);
+    console.error(`Error in get-courses function: ${error}`);
     
     return new Response(
       JSON.stringify({ 
@@ -381,46 +418,11 @@ serve(async (req) => {
         status: 500, 
         headers: { 
           "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*"
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization, x-client-info, apikey"
         } 
       }
     );
   }
 });
-
-/**
- * Helper function to calculate total distance from tee data
- */
-function calculateTotalDistance(tee) {
-  let total = 0;
-  const holeCount = 18; // Standard number of holes
-  
-  for (let i = 1; i <= holeCount; i++) {
-    const distance = tee[`length${i}`];
-    if (distance && !isNaN(parseInt(distance, 10))) {
-      total += parseInt(distance, 10);
-    }
-  }
-  
-  return total > 0 ? total : null;
-}
-
-/**
- * Helper function to calculate course par from par data
- */
-function calculateCoursePar(parData, numHoles) {
-  if (!parData || !Array.isArray(parData)) {
-    return 72; // Default par for standard course
-  }
-  
-  let totalPar = 0;
-  const effectiveHoles = Math.min(parData.length, numHoles);
-  
-  for (let i = 0; i < effectiveHoles; i++) {
-    if (parData[i] && !isNaN(parseInt(parData[i], 10))) {
-      totalPar += parseInt(parData[i], 10);
-    }
-  }
-  
-  return totalPar > 0 ? totalPar : 72;
-}

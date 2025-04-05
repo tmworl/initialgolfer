@@ -20,6 +20,51 @@ const getAuthToken = async () => {
 };
 
 /**
+ * =========================================================================
+ * SEARCH PREPROCESSING ENGINE - EASILY MODIFIABLE FOR TESTING
+ * =========================================================================
+ * This function transforms search terms before they're sent to the API
+ * Modify this function to experiment with different preprocessing strategies
+ * 
+ * @param {string} originalQuery - The raw search query from the user
+ * @return {string} - The processed query for improved search results
+ */
+export function preprocessSearchQuery(originalQuery) {
+  console.log(`[PREPROCESS] Original: "${originalQuery}"`);
+  
+  // STEP 1: Remove leading articles (the, a, an)
+  let processed = originalQuery.replace(/^(the|a|an)\s+/i, '');
+  
+  // STEP 2: Filter out common golf terms that don't add search value
+  // ===== MODIFY THIS LIST TO TEST DIFFERENT FILTERS =====
+  const NOISE_TERMS = [
+    'golf',
+    'course',
+    'club',
+    'cc',
+    'country'
+  ];
+  
+  // Split into words
+  let words = processed.split(/\s+/);
+  
+  // Remove noise terms
+  words = words.filter(word => !NOISE_TERMS.includes(word.toLowerCase()));
+  
+  // If filtering removed everything, use original query
+  if (words.length === 0) {
+    console.log(`[PREPROCESS] Filtering removed all terms, using original query`);
+    return originalQuery;
+  }
+  
+  // Rejoin words
+  processed = words.join(' ');
+  
+  console.log(`[PREPROCESS] Processed: "${processed}"`);
+  return processed;
+}
+
+/**
  * Search for courses by name or location
  * 
  * @param {string} searchTerm - The search term to filter courses
@@ -33,13 +78,18 @@ export const searchCourses = async (searchTerm) => {
     }
     
     const trimmedTerm = searchTerm.trim();
-    console.log('[courseService] Searching for courses with term:', trimmedTerm);
+    
+    // ===== PREPROCESSING APPLIED HERE =====
+    // Apply preprocessing to improve search quality and reduce redundant API calls
+    const processedTerm = preprocessSearchQuery(trimmedTerm);
+    
+    console.log('[courseService] Searching for courses with processed term:', processedTerm);
     
     // Get auth token for request
     const token = await getAuthToken();
     
     // Call edge function for course search
-    const response = await fetch(`${EDGE_FUNCTION_BASE_URL}/get-courses?query=${encodeURIComponent(trimmedTerm)}`, {
+    const response = await fetch(`${EDGE_FUNCTION_BASE_URL}/get-courses?query=${encodeURIComponent(processedTerm)}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -54,7 +104,7 @@ export const searchCourses = async (searchTerm) => {
       const { data, error } = await supabase
         .from('courses')
         .select('id, name, club_name, location, tees, poi')  // Now also requesting POI data
-        .or(`name.ilike.%${trimmedTerm}%,location.ilike.%${trimmedTerm}%,club_name.ilike.%${trimmedTerm}%`)
+        .or(`name.ilike.%${processedTerm}%,location.ilike.%${processedTerm}%,club_name.ilike.%${processedTerm}%`)
         .order('name')
         .limit(15);
       
