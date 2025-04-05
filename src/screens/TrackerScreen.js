@@ -21,6 +21,7 @@ import ShotTable from "../components/ShotTable";
 import HoleNavigator from "../components/HoleNavigator";
 import { AuthContext } from "../context/AuthContext";
 import AppText from "../components/AppText";
+import DistanceIndicator from '../components/DistanceIndicator';
 
 /**
  * TrackerScreen Component
@@ -570,7 +571,13 @@ export default function TrackerScreen({ navigation }) {
             Par {holeData[currentHole]?.par || "?"} • {holeData[currentHole]?.distance || "?"} Yards
           </AppText>
         </View>
-        
+
+        {/* Distance to Green Indicator */}
+        <DistanceIndicator 
+          holeData={holeData[currentHole]} 
+          active={!loading} 
+        />
+
         {/* Show loading indicator when saving data */}
         {loading ? (
           <View style={styles.loadingContainer}>
