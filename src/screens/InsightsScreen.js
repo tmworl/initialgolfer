@@ -1,33 +1,29 @@
 // src/screens/InsightsScreen.js
-
 import React, { useState, useEffect, useContext } from "react";
 import { View, ScrollView, RefreshControl, ActivityIndicator } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import Layout from "../ui/Layout";
 import theme from "../ui/theme";
 import { AuthContext } from "../context/AuthContext";
 import { getLatestInsights } from "../services/insightsService";
-
-// Import design system components
+import InsightCard from "../components/InsightCard"; // New component
 import Typography from "../ui/components/Typography";
-import Button from "../ui/components/Button";
-import Card from "../ui/components/Card";
 
 /**
  * InsightsScreen Component
  * 
  * This screen displays AI-generated insights about the user's golf game.
- * It shows all sections of the insights data in an organized, readable format.
+ * It now uses the InsightCard component for consistent monetization surfaces.
  */
-export default function InsightsScreen() {
-  // Get current authenticated user
-  const { user } = useContext(AuthContext);
+export default function InsightsScreen({ navigation }) {
+  // Get current authenticated user and premium status
+  const { user, hasPermission } = useContext(AuthContext);
+  const hasPremiumAccess = hasPermission("product_a");
   
   // State management
-  const [insights, setInsights] = useState(null);        // Stores the complete insights data
-  const [loading, setLoading] = useState(true);          // Tracks loading state during initial load
-  const [refreshing, setRefreshing] = useState(false);   // Tracks pull-to-refresh state
-  const [error, setError] = useState(null);              // Stores any error messages
+  const [insights, setInsights] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
 
   /**
    * Fetch insights data from the database
@@ -71,21 +67,10 @@ export default function InsightsScreen() {
     setRefreshing(true);
     await fetchInsights();
   };
-
-  // Render an insights section with icon and content
-  const renderInsightSection = (title, content, iconName, iconColor) => {
-    // Don't render if content is empty or null
-    if (!content) return null;
-    
-    return (
-      <View style={styles.sectionContainer}>
-        <View style={styles.sectionHeader}>
-          <Ionicons name={iconName} size={22} color={iconColor} />
-          <Typography variant="subtitle" style={styles.sectionTitle}>{title}</Typography>
-        </View>
-        <Typography variant="body" style={styles.sectionContent}>{content}</Typography>
-      </View>
-    );
+  
+  // Navigation to subscription - conversion action
+  const navigateToSubscription = () => {
+    navigation.navigate("Subscription"); // Adjust to your actual screen name
   };
   
   // Render the loading view
@@ -107,22 +92,14 @@ export default function InsightsScreen() {
     return (
       <Layout>
         <View style={styles.centerContainer}>
-          <Ionicons name="alert-circle" size={48} color={theme.colors.error} />
-          <Typography 
-            variant="subtitle" 
-            color={theme.colors.error}
-            style={styles.errorText}
-          >
-            {error}
-          </Typography>
-          <Button 
-            variant="primary" 
-            onPress={fetchInsights}
-            iconLeft="refresh-outline"
-            style={styles.retryButton}
-          >
-            Try Again
-          </Button>
+          <InsightCard
+            title="Error Loading Insights"
+            content={error}
+            iconName="alert-circle-outline"
+            variant="alert"
+            ctaText="Try Again"
+            ctaAction={fetchInsights}
+          />
         </View>
       </Layout>
     );
@@ -133,20 +110,12 @@ export default function InsightsScreen() {
     return (
       <Layout>
         <View style={styles.centerContainer}>
-          <Ionicons name="golf-outline" size={64} color={theme.colors.primary} />
-          <Typography 
-            variant="title" 
-            style={styles.emptyTitleText}
-          >
-            No Insights Yet
-          </Typography>
-          <Typography 
-            variant="secondary"
-            style={styles.emptyText}
-          >
-            Complete a round to get personalized insights from your golf coach.
-            Track your shots to see patterns and get tips to improve your game.
-          </Typography>
+          <InsightCard
+            title="No Insights Yet"
+            content="Complete a round to get personalized insights from your golf coach. Track your shots to see patterns and get tips to improve your game."
+            iconName="golf-outline"
+            variant="standard"
+          />
         </View>
       </Layout>
     );
@@ -165,95 +134,103 @@ export default function InsightsScreen() {
           />
         }
       >
-        <Card style={{margin: 16}}>
-          {/* Summary Section */}
-          {insights.summary && (
-            <Card.Header>
-              <Typography variant="body" weight="medium">
-                {insights.summary}
-              </Typography>
-            </Card.Header>
-          )}
-          
-          <View style={{padding: insights.summary ? 0 : 8}}>
-            {/* Primary Issue Section */}
-            {renderInsightSection(
-              "Primary Issue",
-              insights.primaryIssue,
-              "warning-outline", 
-              "#f57c00" // Orange
-            )}
-            
-            {/* Reason Section */}
-            {renderInsightSection(
-              "Reason",
-              insights.reason,
-              "information-circle-outline", 
-              "#0288d1" // Blue
-            )}
-            
-            {/* Practice Focus Section */}
-            {renderInsightSection(
-              "Practice Focus",
-              insights.practiceFocus,
-              "basketball-outline", 
-              "#4caf50" // Green
-            )}
-            
-            {/* Management Tip Section */}
-            {renderInsightSection(
-              "Management Tip",
-              insights.managementTip,
-              "bulb-outline", 
-              "#ffc107" // Amber
-            )}
-            
-            {/* Progress Section - Only shown if available and not null */}
-            {insights.progress && insights.progress !== "null" && (
-              renderInsightSection(
-                "Progress",
-                insights.progress,
-                "trending-up-outline", 
-                "#9c27b0" // Purple
-              )
-            )}
-          </View>
-          
-          {/* Show when the insights were generated */}
-          {insights.generatedAt && (
-            <Card.Footer>
-              <Typography 
-                variant="caption" 
-                italic={true}
-                align="center"
-              >
-                Generated on {new Date(insights.generatedAt).toLocaleDateString()}
-              </Typography>
-            </Card.Footer>
-          )}
-        </Card>
+        {/* Performance Summary - Available to all users */}
+        <InsightCard
+          title="Performance Summary"
+          content={insights.summary}
+          iconName="analytics-outline"
+          variant={hasPremiumAccess ? "highlight" : "standard"}
+          // Only premium users get refresh capability
+          onRefresh={hasPremiumAccess ? onRefresh : undefined}
+          // Conversion opportunity for non-premium users
+          ctaText={!hasPremiumAccess ? "Unlock Full Analysis" : undefined}
+          ctaAction={navigateToSubscription}
+        />
         
-        {/* Refresh button at the bottom */}
-        <View style={styles.buttonContainer}>
-          <Button
-            variant="outline"
-            iconLeft="refresh-outline"
-            onPress={onRefresh}
-            loading={refreshing}
-          >
-            Refresh Insights
-          </Button>
-        </View>
+        {/* Primary Issue - Premium content */}
+        {hasPremiumAccess && insights.primaryIssue && (
+          <InsightCard
+            title="Primary Issue"
+            content={insights.primaryIssue}
+            iconName="warning-outline"
+            variant="highlight"
+          />
+        )}
+        
+        {/* Root Cause Analysis - Premium content */}
+        {hasPremiumAccess && insights.reason && (
+          <InsightCard
+            title="Root Cause Analysis"
+            content={insights.reason}
+            iconName="information-circle-outline"
+            variant="standard"
+          />
+        )}
+        
+        {/* Practice Focus - Premium content */}
+        {hasPremiumAccess && insights.practiceFocus && (
+          <InsightCard
+            title="Practice Focus"
+            content={insights.practiceFocus}
+            iconName="basketball-outline"
+            variant="success"
+          />
+        )}
+        
+        {/* Management Tip - Premium content */}
+        {hasPremiumAccess && insights.managementTip && (
+          <InsightCard
+            title="Management Tip"
+            content={insights.managementTip}
+            iconName="bulb-outline"
+            variant="standard"
+          />
+        )}
+        
+        {/* Progress - Premium content (only if available) */}
+        {hasPremiumAccess && insights.progress && insights.progress !== "null" && (
+          <InsightCard
+            title="Your Progress"
+            content={insights.progress}
+            iconName="trending-up-outline"
+            variant="success"
+          />
+        )}
+        
+        {/* Non-premium upsell card */}
+        {!hasPremiumAccess && (
+          <InsightCard
+            title="Unlock Premium Insights"
+            content="Upgrade to get detailed analysis of your primary issues, personalized practice recommendations, and course management strategies tailored to your game."
+            iconName="lock-closed-outline"
+            variant="alert"
+            ctaText="Upgrade Now"
+            ctaAction={navigateToSubscription}
+          />
+        )}
+        
+        {/* Analytics metrics for generation date */}
+        {insights.generatedAt && (
+          <View style={styles.footerContainer}>
+            <Typography 
+              variant="caption" 
+              italic={true}
+              align="center"
+            >
+              Generated on {new Date(insights.generatedAt).toLocaleDateString()}
+            </Typography>
+          </View>
+        )}
       </ScrollView>
     </Layout>
   );
 }
 
-// We're keeping the styles here for compatibility, but gradually they could be
-// moved to the component level in the future design system
+// Styles with strategic layout optimizations for conversion
 const styles = {
   scrollContainer: {
     flexGrow: 1,
+    paddingHorizontal: 16,
     paddingBottom: 24,
   },
   centerContainer: {
@@ -262,44 +239,12 @@ const styles = {
     alignItems: "center",
     padding: 40,
   },
-  sectionContainer: {
-    marginBottom: 20,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  sectionTitle: {
-    marginLeft: 8,
-  },
-  sectionContent: {
-    lineHeight: 24,
-    paddingLeft: 30, // Indent to align with section title
-  },
   loadingText: {
     marginTop: 16,
   },
-  errorText: {
+  footerContainer: {
     marginTop: 16,
-    textAlign: "center",
     marginBottom: 24,
-  },
-  retryButton: {
-    minWidth: 120,
-  },
-  emptyTitleText: {
-    marginTop: 24,
-    marginBottom: 12,
-  },
-  emptyText: {
-    textAlign: "center",
-    paddingHorizontal: 24,
-    lineHeight: 24,
-  },
-  buttonContainer: {
     alignItems: 'center',
-    marginTop: 16,
-    marginBottom: 24,
   }
 };

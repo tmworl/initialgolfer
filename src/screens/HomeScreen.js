@@ -1,5 +1,4 @@
 // src/screens/HomeScreen.js
-
 import React, { useState, useEffect, useContext } from "react";
 import { View, ActivityIndicator, StyleSheet, ScrollView } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -7,7 +6,7 @@ import Layout from "../ui/Layout";
 import theme from "../ui/theme";
 import { supabase } from "../services/supabase";
 import { AuthContext } from "../context/AuthContext";
-import InsightsSummaryCard from "../components/InsightsSummaryCard";
+import InsightCard from "../components/InsightCard"; // New component
 import RoundSummaryCard from "../components/RoundSummaryCard";
 import { getLatestInsights } from "../services/insightsService";
 import Typography from "../ui/components/Typography";
@@ -22,13 +21,16 @@ import Card from "../ui/components/Card";
  * Enhanced with design system components for visual consistency.
  */
 export default function HomeScreen({ navigation }) {
-  const { user } = useContext(AuthContext);
+  const { user, hasPermission } = useContext(AuthContext);
   const [recentRounds, setRecentRounds] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  // Add new state for insights
+  // Insights state for monetization surface
   const [insightsSummary, setInsightsSummary] = useState(null);
   const [insightsLoading, setInsightsLoading] = useState(true);
+  
+  // Determine premium status for conversion opportunities
+  const hasPremiumAccess = hasPermission("product_a");
 
   // Fetch recent rounds when component mounts
   useEffect(() => {
@@ -55,8 +57,6 @@ export default function HomeScreen({ navigation }) {
           .order("created_at", { ascending: false })
           .limit(5);
           
-        console.log("Rounds data:", data);
-        
         if (error) {
           console.error("Error fetching rounds:", error);
           throw error;
@@ -106,7 +106,7 @@ export default function HomeScreen({ navigation }) {
     fetchRecentRounds();
   }, [user]);
 
-  // Fetch insights summary
+  // Fetch insights summary - monetization content
   useEffect(() => {
     async function fetchInsightsSummary() {
       if (!user) return;
@@ -114,7 +114,7 @@ export default function HomeScreen({ navigation }) {
       try {
         setInsightsLoading(true);
         
-        // Use our new service function to get just the summary
+        // Use our service function to get just the summary
         const summary = await getLatestInsights(user.id, 'summary');
         console.log("Fetched insights summary:", summary);
         
@@ -131,6 +131,21 @@ export default function HomeScreen({ navigation }) {
     
     fetchInsightsSummary();
   }, [user]);
+  
+  // Refresh insights data
+  const refreshInsights = async () => {
+    if (!user) return;
+    
+    try {
+      setInsightsLoading(true);
+      const summary = await getLatestInsights(user.id, 'summary');
+      setInsightsSummary(summary);
+    } catch (error) {
+      console.error("Error refreshing insights:", error);
+    } finally {
+      setInsightsLoading(false);
+    }
+  };
 
   // Handle navigation to scorecard
   const handleRoundPress = (roundId) => {
@@ -145,10 +160,18 @@ export default function HomeScreen({ navigation }) {
         showsVerticalScrollIndicator={true}
       >
         <View style={styles.container}>
-          {/* Insights Summary Card */}
-          <InsightsSummaryCard 
-            summary={insightsSummary} 
-            loading={insightsLoading} 
+          {/* Primary Monetization Surface: Insights Card */}
+          <InsightCard
+            title="Coach's Corner"
+            content={insightsSummary || "Complete a round to get personalized insights from your golf coach."}
+            loading={insightsLoading}
+            // Different treatment based on permission status
+            variant={hasPremiumAccess ? "highlight" : "standard"}
+            // Only premium users get refresh capability - visible value gap
+            onRefresh={hasPremiumAccess ? refreshInsights : undefined}
+            // Conversion opportunity for non-premium users
+            ctaText={!hasPremiumAccess && insightsSummary ? "Unlock Full Analysis" : undefined}
+            ctaAction={() => navigation.navigate("Subscription")}
           />
           
           {/* Start New Round button */}
