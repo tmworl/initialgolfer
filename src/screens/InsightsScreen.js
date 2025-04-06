@@ -5,14 +5,14 @@ import Layout from "../ui/Layout";
 import theme from "../ui/theme";
 import { AuthContext } from "../context/AuthContext";
 import { getLatestInsights } from "../services/insightsService";
-import InsightCard from "../components/InsightCard"; // New component
+import InsightCard from "../components/InsightCard"; 
 import Typography from "../ui/components/Typography";
 
 /**
  * InsightsScreen Component
  * 
  * This screen displays AI-generated insights about the user's golf game.
- * It now uses the InsightCard component for consistent monetization surfaces.
+ * Now supports dynamic tiered insights architecture for adaptive content display.
  */
 export default function InsightsScreen({ navigation }) {
   // Get current authenticated user and premium status
@@ -70,7 +70,7 @@ export default function InsightsScreen({ navigation }) {
   
   // Navigation to subscription - conversion action
   const navigateToSubscription = () => {
-    navigation.navigate("Subscription"); // Adjust to your actual screen name
+    navigation.navigate("Subscription"); // Adjust to your actual subscription screen name
   };
   
   // Render the loading view
@@ -121,6 +121,12 @@ export default function InsightsScreen({ navigation }) {
     );
   }
   
+  // Check if insights has the new tieredInsights format
+  const hasTieredInsights = insights && 
+                           insights.tieredInsights && 
+                           Array.isArray(insights.tieredInsights) && 
+                           insights.tieredInsights.length > 0;
+  
   // Render the insights content
   return (
     <Layout>
@@ -134,79 +140,106 @@ export default function InsightsScreen({ navigation }) {
           />
         }
       >
-        {/* Performance Summary - Available to all users */}
-        <InsightCard
-          title="Performance Summary"
-          content={insights.summary}
-          iconName="analytics-outline"
-          variant={hasPremiumAccess ? "highlight" : "standard"}
-          // Only premium users get refresh capability
-          onRefresh={hasPremiumAccess ? onRefresh : undefined}
-          // Conversion opportunity for non-premium users
-          ctaText={!hasPremiumAccess ? "Unlock Full Analysis" : undefined}
-          ctaAction={navigateToSubscription}
-        />
-        
-        {/* Primary Issue - Premium content */}
-        {hasPremiumAccess && insights.primaryIssue && (
-          <InsightCard
-            title="Primary Issue"
-            content={insights.primaryIssue}
-            iconName="warning-outline"
-            variant="highlight"
-          />
-        )}
-        
-        {/* Root Cause Analysis - Premium content */}
-        {hasPremiumAccess && insights.reason && (
-          <InsightCard
-            title="Root Cause Analysis"
-            content={insights.reason}
-            iconName="information-circle-outline"
-            variant="standard"
-          />
-        )}
-        
-        {/* Practice Focus - Premium content */}
-        {hasPremiumAccess && insights.practiceFocus && (
-          <InsightCard
-            title="Practice Focus"
-            content={insights.practiceFocus}
-            iconName="basketball-outline"
-            variant="success"
-          />
-        )}
-        
-        {/* Management Tip - Premium content */}
-        {hasPremiumAccess && insights.managementTip && (
-          <InsightCard
-            title="Management Tip"
-            content={insights.managementTip}
-            iconName="bulb-outline"
-            variant="standard"
-          />
-        )}
-        
-        {/* Progress - Premium content (only if available) */}
-        {hasPremiumAccess && insights.progress && insights.progress !== "null" && (
-          <InsightCard
-            title="Your Progress"
-            content={insights.progress}
-            iconName="trending-up-outline"
-            variant="success"
-          />
-        )}
-        
-        {/* Non-premium upsell card */}
-        {!hasPremiumAccess && (
-          <InsightCard
-            title="Unlock Premium Insights"
-            content="Upgrade to get detailed analysis of your primary issues, personalized practice recommendations, and course management strategies tailored to your game."
-            iconName="lock-closed-outline"
-            variant="alert"
-            ctaText="Upgrade Now"
-            ctaAction={navigateToSubscription}
-          />
+        {/* Check if we have tiered insights structure - if not, fall back to previous format */}
+        {hasTieredInsights ? (
+          // Render dynamic cards from tieredInsights array
+          insights.tieredInsights.map((insight, index) => {
+            // Check if user has permissions for this insight (adding permission handling but keeping insights themselves)
+            const shouldGate = !hasPremiumAccess && insight.id !== "summary";
+            
+            return (
+              <InsightCard
+                key={insight.id || index}
+                title={insight.title}
+                content={insight.content}
+                iconName={insight.iconName}
+                variant={insight.variant}
+                // Allow premium refresh on main summary card
+                onRefresh={insight.id === "summary" && hasPremiumAccess ? onRefresh : undefined}
+                // Add CTA for premium features if user doesn't have premium access
+                ctaText={shouldGate ? "Unlock Premium Insights" : undefined}
+                ctaAction={shouldGate ? navigateToSubscription : undefined}
+              />
+            );
+          })
+        ) : (
+          // Fallback to original implementation with hardcoded cards
+          <>
+            {/* Performance Summary - Available to all users */}
+            <InsightCard
+              title="Performance Summary"
+              content={insights.summary}
+              iconName="analytics-outline"
+              variant={hasPremiumAccess ? "highlight" : "standard"}
+              // Only premium users get refresh capability
+              onRefresh={hasPremiumAccess ? onRefresh : undefined}
+              // Conversion opportunity for non-premium users
+              ctaText={!hasPremiumAccess ? "Unlock Full Analysis" : undefined}
+              ctaAction={navigateToSubscription}
+            />
+            
+            {/* Primary Issue - Premium content */}
+            {hasPremiumAccess && insights.primaryIssue && (
+              <InsightCard
+                title="Primary Issue"
+                content={insights.primaryIssue}
+                iconName="warning-outline"
+                variant="highlight"
+              />
+            )}
+            
+            {/* Root Cause Analysis - Premium content */}
+            {hasPremiumAccess && insights.reason && (
+              <InsightCard
+                title="Root Cause Analysis"
+                content={insights.reason}
+                iconName="information-circle-outline"
+                variant="standard"
+              />
+            )}
+            
+            {/* Practice Focus - Premium content */}
+            {hasPremiumAccess && insights.practiceFocus && (
+              <InsightCard
+                title="Practice Focus"
+                content={insights.practiceFocus}
+                iconName="basketball-outline"
+                variant="success"
+              />
+            )}
+            
+            {/* Management Tip - Premium content */}
+            {hasPremiumAccess && insights.managementTip && (
+              <InsightCard
+                title="Management Tip"
+                content={insights.managementTip}
+                iconName="bulb-outline"
+                variant="standard"
+              />
+            )}
+            
+            {/* Progress - Premium content (only if available) */}
+            {hasPremiumAccess && insights.progress && insights.progress !== "null" && (
+              <InsightCard
+                title="Your Progress"
+                content={insights.progress}
+                iconName="trending-up-outline"
+                variant="success"
+              />
+            )}
+            
+            {/* Non-premium upsell card */}
+            {!hasPremiumAccess && (
+              <InsightCard
+                title="Unlock Premium Insights"
+                content="Upgrade to get detailed analysis of your primary issues, personalized practice recommendations, and course management strategies tailored to your game."
+                iconName="lock-closed-outline"
+                variant="alert"
+                ctaText="Upgrade Now"
+                ctaAction={navigateToSubscription}
+              />
+            )}
+          </>
         )}
         
         {/* Analytics metrics for generation date */}

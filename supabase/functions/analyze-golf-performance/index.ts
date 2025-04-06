@@ -108,7 +108,11 @@ serve(async (req) => {
         courses:course_id (
           id,
           name,
-          par
+          par,
+          club_name,
+          location,
+          country,
+          holes
         )
       `)
       .eq("profile_id", userId)
@@ -145,6 +149,11 @@ serve(async (req) => {
     
     // Process hole data for each round
     const processedRounds = roundsData.map(round => {
+      // Extract time data for temporal analysis
+      const roundDate = new Date(round.created_at);
+      const roundTime = roundDate.toTimeString().split(' ')[0];
+      const roundTimestamp = roundDate.getTime();
+      
       // Filter holes for this specific round
       const roundHoles = allHoleData.filter(hole => hole.round_id === round.id);
       
@@ -173,6 +182,20 @@ serve(async (req) => {
           return;
         }
         
+        // Extract timestamps for temporal analysis
+        const holeTimestamps = holeData.shots
+          .filter(shot => shot.timestamp)
+          .map(shot => new Date(shot.timestamp).getTime());
+          
+        // Calculate timing within the round if possible
+        const holeTimeInfo = {
+          startTime: holeTimestamps.length > 0 ? Math.min(...holeTimestamps) : null,
+          endTime: holeTimestamps.length > 0 ? Math.max(...holeTimestamps) : null,
+          duration: holeTimestamps.length >= 2 ? 
+            (Math.max(...holeTimestamps) - Math.min(...holeTimestamps)) / 1000 / 60 : null, // in minutes
+          sequenceInRound: hole.hole_number // Natural sequence of the hole
+        };
+        
         // Add to hole details for detailed analysis
         holeDetails.push({
           holeNumber: hole.hole_number,
@@ -181,7 +204,10 @@ serve(async (req) => {
           index: holeData.index || null,
           features: holeData.features || [],
           totalShots: hole.total_score || holeData.shots.length,
-          shots: holeData.shots
+          shots: holeData.shots,
+          timeInfo: holeTimeInfo,
+          // Add POI data if available
+          poi: holeData.poi || null
         });
         
         // Count shots by type and quality for the aggregate view
@@ -196,19 +222,31 @@ serve(async (req) => {
         });
       });
       
-      // Format date for readability
-      const roundDate = new Date(round.created_at).toLocaleDateString();
+      // Find course-specific hole data if available
+      let courseHoleData = null;
+      if (round.courses && round.courses.holes && Array.isArray(round.courses.holes)) {
+        courseHoleData = round.courses.holes;
+      }
       
       // Return processed round data (with both aggregate counts and detailed hole-by-hole data)
       return {
         roundId: round.id,
-        date: roundDate,
+        date: roundDate.toLocaleDateString(),
+        time: roundTime,
+        timestamp: roundTimestamp,
         totalScore: round.gross_shots,
         par: round.courses?.par || 72, // Default to 72 if par not available
         teeName: round.selected_tee_name || "Unknown",
         shots: shotCounts,              // Aggregate counts for backward compatibility
-        holeDetails: holeDetails,       // NEW: Detailed hole-by-hole data
-        courseName: round.courses?.name || "Unknown Course"
+        holeDetails: holeDetails,       // Detailed hole-by-hole data
+        courseName: round.courses?.name || "Unknown Course",
+        courseInfo: {
+          name: round.courses?.name || "Unknown Course",
+          clubName: round.courses?.club_name || null,
+          location: round.courses?.location || null,
+          country: round.courses?.country || null,
+          holes: courseHoleData
+        }
       };
     });
     
@@ -220,26 +258,45 @@ serve(async (req) => {
     
     console.log("Formatted golf data for Claude - round count:", golfData.totalRounds);
     
-    // Updated prompt content requesting JSON format for multiple rounds
-    const promptContent = `You are a golf pro that is going to provide insights that reduce my overall shots, find patterns and infer as much as you can from the data I give you, context is key. Only use the data I provide you, but sound as human as possible. Don't make anything up about techniques, we don't have more data than what we have given you but you can infer things about tee shot to hole in each hole.
+    // Enhanced prompt content focused on retention-oriented insights
+    const promptContent = `You are a professional golf coach providing premium insights to a subscriber. Create personalized, specific, and actionable insights focused on helping them improve. Think beyond basic analysis - create longitudinal, spatial, and sequence-based insights that demonstrate extraordinary value.
 
-I'm providing data from ${golfData.totalRounds} recent golf rounds. Each round includes shot outcomes categorized by type ("Tee Shot", "Long Shot", "Approach", "Chip", "Putts", "Sand", "Penalties") and quality ("On Target", "Slightly Off", "Recovery Needed"). Use these to infer and give tips, but understand the meaning behind them, don't just quote directly "Slightly Off", be more of a real golf pro and assume if someone thinks something is slightly off, then its not in the best position and their next shot is going to be harder, same with recovery, and vice versa for on target.
+I'm providing data from ${golfData.totalRounds} recent golf rounds. Each round includes detailed shot-by-shot information including shot types, outcomes, and timestamps, as well as course and spatial data when available.
 
-When analyzing shot quality, note that "On Target" shots typically indicate successful execution, "Slightly Off" shots indicate minor errors that may still result in acceptable positions, while "Recovery Needed" shots suggest significant problems requiring recovery. When analyzing approach shots, consider their relationship to long shots or drive quality to understand if problems cascade from poor tee shots or if approach shots are independently problematic that then lead onto additional shots elsewhere, same for long shots.
+As you analyze this data, focus on these high-value dimensions:
 
-For each round, you also have detailed hole-by-hole information with par, distance, hole index (difficulty), features, and the specific sequence of shots taken. Use this to identify patterns such as:
-- Performance on different par types (par 3/4/5)
-- Impact of hole distance on scoring
-- Shot sequences that commonly lead to problems
-- How hazards and features affect play
+1. SHOT SEQUENCE ANALYSIS:
+   - Identify how one shot affects the next in the sequence (e.g., how poor tee shots lead to challenging approaches)
+   - Find patterns in shot sequences that consistently cost strokes
+   - Analyze how recovery shots compound across holes
 
-Look for patterns across these rounds. Identify consistent strengths and weaknesses, and note any trends or improvements over time. Focus on finding the root causes of issues rather than just symptoms.
+2. SPATIAL INTELLIGENCE:
+   - Use course-specific information when available to provide contextual insights
+   - Relate performance to specific course features and challenges
+   - Consider how hole layouts might affect strategy and performance
+
+3. TEMPORAL PATTERNS:
+   - Look for time-based performance variations (early vs. late round)
+   - Identify fatigue patterns or concentration changes
+   - Note if performance varies based on time of day or round duration
+
+4. SKILL PROGRESSION PATHWAY:
+   - Create a forward-looking improvement roadmap
+   - Suggest specific, practical practice routines targeting the issues you identify
+   - Provide a clear path from current performance to improved outcomes
+
+5. CAUSAL INFERENCE:
+   - Make reasonable inferences about causes (e.g., 3-putts likely from poor approach shots)
+   - Connect outcome patterns to skill gaps
+   - Identify the root causes of recurring issues
+
+Remember to stay grounded in the data provided. While you should make reasonable inferences, don't invent techniques or specifics that aren't supported by the data. Be specific and concise, focusing on insights that have the greatest potential impact on scoring.
 
 Please provide your insights in a structured JSON format with the following fields:
 {
-  "summary": "2-3 sentence overview of my game across my rounds",
-  "primaryIssue": "The #1 area consistently costing me overall strokes (1 sentence)",
-  "reason": "Why this issue is costly in terms of the sequence of shots in a hole or a whole round (2-3 sentences explaining the impact)",
+  "summary": "2-3 sentence overview of the player's game across analyzed rounds",
+  "primaryIssue": "The #1 area consistently costing strokes (1 sentence)",
+  "reason": "Why this issue is costly in terms of the sequence of shots in a hole or round (2-3 sentences explaining the impact)",
   "practiceFocus": "Specific practice recommendation based on patterns across rounds",
   "managementTip": "One specific course management tip to address the primary issue",
   "progress": "Note any improvement trends across the analyzed rounds. If no clear progress pattern exists, leave this as null."
@@ -299,6 +356,8 @@ Your response should be formatted as valid JSON that can be parsed directly. Do 
     
     // Parse Claude's JSON response
     let insightsJSON;
+    let completeInsights;
+    
     try {
       // This will extract and parse the JSON if Claude wrapped it in any markdown code blocks
       const jsonMatch = claudeMessage.match(/```json\s*([\s\S]*?)\s*```/) || 
@@ -306,22 +365,93 @@ Your response should be formatted as valid JSON that can be parsed directly. Do 
                          [null, claudeMessage];
       insightsJSON = JSON.parse(jsonMatch[1] || claudeMessage);
       console.log("Successfully parsed insights JSON");
+      
+      // Transform into the new tieredInsights format
+      const tieredInsightsFormat = {
+        summary: insightsJSON.summary,
+        tieredInsights: [
+          {
+            id: "summary",
+            title: "Performance Summary",
+            content: insightsJSON.summary,
+            iconName: "analytics-outline",
+            variant: "highlight"
+          }
+        ]
+      };
+      
+      // Add primary issue card if it exists
+      if (insightsJSON.primaryIssue) {
+        tieredInsightsFormat.tieredInsights.push({
+          id: "primary-issue",
+          title: "Primary Issue",
+          content: insightsJSON.primaryIssue,
+          iconName: "warning-outline", 
+          variant: "alert"
+        });
+      }
+      
+      // Add root cause card if it exists
+      if (insightsJSON.reason) {
+        tieredInsightsFormat.tieredInsights.push({
+          id: "root-cause",
+          title: "Root Cause Analysis",
+          content: insightsJSON.reason,
+          iconName: "information-circle-outline",
+          variant: "standard"
+        });
+      }
+      
+      // Add practice focus card if it exists
+      if (insightsJSON.practiceFocus) {
+        tieredInsightsFormat.tieredInsights.push({
+          id: "practice-focus",
+          title: "Practice Focus",
+          content: insightsJSON.practiceFocus,
+          iconName: "basketball-outline",
+          variant: "success"
+        });
+      }
+      
+      // Add management tip card if it exists
+      if (insightsJSON.managementTip) {
+        tieredInsightsFormat.tieredInsights.push({
+          id: "management-tip",
+          title: "Management Tip",
+          content: insightsJSON.managementTip,
+          iconName: "bulb-outline",
+          variant: "standard"
+        });
+      }
+      
+      // Add progress card if it exists and isn't null
+      if (insightsJSON.progress && insightsJSON.progress !== "null") {
+        tieredInsightsFormat.tieredInsights.push({
+          id: "progress",
+          title: "Your Progress",
+          content: insightsJSON.progress,
+          iconName: "trending-up-outline",
+          variant: "success"
+        });
+      }
+      
+      // Create complete insights object with metadata
+      completeInsights = {
+        ...tieredInsightsFormat,
+        analyzedRounds: roundIds,
+        generatedAt: new Date().toISOString()
+      };
+      
     } catch (jsonError) {
       console.error("Failed to parse Claude's response as JSON:", jsonError);
       // Fall back to returning the raw text if parsing fails
-      insightsJSON = { 
+      completeInsights = { 
         error: "Failed to parse as JSON",
-        rawResponse: claudeMessage
+        rawResponse: claudeMessage,
+        analyzedRounds: roundIds,
+        generatedAt: new Date().toISOString()
       };
     }
-    
-    // Prepare the complete insights object to store in the database
-    // Include the parsed insights plus metadata about which rounds were analyzed
-    const completeInsights = {
-      ...insightsJSON,
-      analyzedRounds: roundIds,
-      generatedAt: new Date().toISOString()
-    };
     
     // Store the insights in the database
     let storedInsightsId = null;
@@ -355,7 +485,7 @@ Your response should be formatted as valid JSON that can be parsed directly. Do 
     return new Response(
       JSON.stringify({
         message: "Golf insights generated successfully",
-        insights: insightsJSON,
+        insights: completeInsights,
         insightsId: storedInsightsId,        // Include the ID of the stored insights record
         analyzedRounds: roundIds,            // Include which rounds were analyzed
         timestamp: new Date().toISOString()
