@@ -1,8 +1,7 @@
 // src/components/ShotTable.js
 //
-// Migration from direct Text components to Typography system
-// This component is a revenue-critical interface as it directly captures the data
-// that drives our AI insights and premium feature upsell opportunities.
+// Enhanced with strategic display layer transformation to optimize visual density
+// while maintaining complete data model integrity for analytics pipeline continuity
 
 import React from "react";
 import { View, TouchableOpacity, StyleSheet, Dimensions } from "react-native";
@@ -40,6 +39,11 @@ export default function ShotTable({ shotCounts, activeColumn, setActiveColumn, a
       </View>
     );
   }
+
+  // Display transformation layer - preserves data model while optimizing visual interface
+  const displayOutcome = (outcome) => {
+    return outcome === "Recovery Needed" ? "Bad" : outcome;
+  };
 
   // Function to get color for outcome column headers
   const getOutcomeColor = (outcome) => {
@@ -82,11 +86,11 @@ export default function ShotTable({ shotCounts, activeColumn, setActiveColumn, a
               weight={activeColumn === outcome ? "bold" : "normal"}
               style={[
                 styles.headerText,
-                // Smaller font for Recovery Needed
-                outcome === "Recovery Needed" ? styles.smallerHeaderText : null
+                // No need for smaller text since we're using shorter display label
+                // outcome === "Recovery Needed" ? styles.smallerHeaderText : null
               ]}
             >
-              {outcome}
+              {displayOutcome(outcome)}
             </Typography>
           </TouchableOpacity>
         ))}
@@ -209,7 +213,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   smallerHeaderText: {
-    fontSize: 12, // Even smaller for long text
+    fontSize: 12, // Even smaller for long text - no longer needed with display transformation
   },
   shotTypeText: {
     fontSize: 14, // Reduced from 16

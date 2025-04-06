@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useContext, useCallback } from "react";
 import { 
   View, 
-  Text, 
   StyleSheet, 
   Alert, 
   ActivityIndicator, 
@@ -11,10 +10,7 @@ import {
   SafeAreaView,
   BackHandler,
   TouchableOpacity
-} from "react-native"; // Remove Button from here
-
-// Add this import for your design system Button
-import Button from "../ui/components/Button";
+} from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Layout from "../ui/Layout";
 import theme from "../ui/theme";
@@ -22,7 +18,8 @@ import { createRound, saveHoleData, completeRound } from "../services/roundservi
 import ShotTable from "../components/ShotTable";
 import HoleNavigator from "../components/HoleNavigator";
 import { AuthContext } from "../context/AuthContext";
-import AppText from "../components/AppText";
+import Typography from "../ui/components/Typography";
+import Button from "../ui/components/Button";
 import DistanceIndicator from '../components/DistanceIndicator';
 
 /**
@@ -41,7 +38,6 @@ export default function TrackerScreen({ navigation }) {
   const [totalHoles] = useState(18); // Standard golf round is 18 holes
   
   // Initialize hole data structure for all holes
-  // Now includes poi field to store Points of Interest for each hole
   const initialHoleState = {};
   for (let i = 1; i <= 18; i++) {
     initialHoleState[i] = {
@@ -547,17 +543,18 @@ export default function TrackerScreen({ navigation }) {
   const currentHoleScore = holeData[currentHole]?.shots?.length || 0;
   const currentHolePar = holeData[currentHole]?.par || 0;
   const scoreRelativeToPar = currentHoleScore - currentHolePar;
-  const scoreDisplay = scoreRelativeToPar === 0 
-    ? "Par" 
-    : scoreRelativeToPar > 0 
-      ? `+${scoreRelativeToPar}` 
-      : scoreRelativeToPar;
+  
+  // Add color-coding helper function for score display
+  const getScoreColor = () => {
+    if (scoreRelativeToPar < 0) return theme.colors.success; // Under par (good)
+    if (scoreRelativeToPar > 0) return theme.colors.error;   // Over par (bad)
+    return theme.colors.text;  // At par (neutral)
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Use ScrollView to allow scrolling on smaller devices if needed */}
       <ScrollView contentContainerStyle={styles.container}>
-        {/* Hole navigator */}
+        {/* 1. Navigator - KEEP EXISTING */}
         <View style={styles.navigatorContainer}>
           <HoleNavigator
             currentHole={currentHole}
@@ -566,50 +563,44 @@ export default function TrackerScreen({ navigation }) {
             totalHoles={totalHoles}
           />
         </View>
-        
-        {/* Par and Yardage information */}
-        <View style={styles.holeInfoContainer}>
-          <AppText variant="body" style={styles.holeInfoText}>
-            Par {holeData[currentHole]?.par || "?"} • {holeData[currentHole]?.distance || "?"} Yards
-          </AppText>
-        </View>
 
-        {/* Distance to Green Indicator */}
-        <DistanceIndicator 
-          holeData={holeData[currentHole]} 
-          active={!loading} 
-        />
+        {/* 2. Integrated Hole Info + Score - NEW COMPONENT */}
+        <View style={styles.holeInfoContainer}>
+          <View style={styles.holeDetailsSection}>
+            <Typography variant="body" style={styles.holeInfoText}>
+              Hole {currentHole} • Par {holeData[currentHole]?.par || "?"} • {holeData[currentHole]?.distance || "?"} yds
+            </Typography>
+            
+            <View style={styles.scoreIndicator}>
+              <Typography 
+                variant="body" 
+                weight="semibold"
+                color={getScoreColor()}
+                style={styles.scoreText}
+              >
+                {currentHoleScore}
+              </Typography>
+            </View>
+          </View>
+        </View>
 
         {/* Show loading indicator when saving data */}
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={styles.loadingText}>Saving your data...</Text>
+            <Typography variant="body" style={styles.loadingText}>
+              Saving your data...
+            </Typography>
           </View>
         ) : (
           <View style={styles.contentContainer}>
-            {/* Current score display */}
-            <View style={styles.scoreContainer}>
-              <View style={styles.scoreBox}>
-                <AppText variant="subtitle" style={styles.scoreLabel}>Current Score</AppText>
-                <AppText variant="title" style={styles.scoreValue}>{currentHoleScore}</AppText>
-                {currentHolePar > 0 && (
-                  <AppText 
-                    variant="body" 
-                    style={[
-                      styles.parComparison,
-                      scoreRelativeToPar > 0 ? styles.overPar : 
-                      scoreRelativeToPar < 0 ? styles.underPar : 
-                      styles.atPar
-                    ]}
-                  >
-                    {scoreDisplay}
-                  </AppText>
-                )}
-              </View>
-            </View>
+            {/* 3. Distance Indicator - MAINTAINED POSITION */}
+            <DistanceIndicator 
+              holeData={holeData[currentHole]} 
+              active={!loading} 
+            />
             
-            {/* Shot tracking table */}
+            {/* 4. Shot Table - MAINTAINED POSITION BUT EXPANDED HEIGHT */}
             <View style={styles.tableContainer}>
               <ShotTable
                 shotCounts={holeData[currentHole].shotCounts}
@@ -620,7 +611,7 @@ export default function TrackerScreen({ navigation }) {
               />
             </View>
             
-            {/* Button to complete current hole or the entire round */}
+            {/* 5. Action Button - MAINTAINED POSITION */}
             <View style={styles.buttonContainer}>
               <Button
                 variant="primary"
@@ -655,45 +646,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   holeInfoContainer: {
-    alignItems: 'center',
     marginBottom: 12,
     backgroundColor: '#f8f8f8',
-    borderRadius: 4,
-    padding: 4,
+    borderRadius: 8,
+    padding: 10,
+  },
+  holeDetailsSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   holeInfoText: {
     color: '#444',
+    flex: 1,
   },
-  scoreContainer: {
+  scoreIndicator: {
+    marginLeft: 12,
+    minWidth: 30,
     alignItems: 'center',
-    marginBottom: 16,
   },
-  scoreBox: {
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-    minWidth: 120,
-  },
-  scoreLabel: {
-    color: '#666',
-    marginBottom: 4,
-  },
-  scoreValue: {
-    fontSize: 28,
-    fontWeight: 'bold',
-  },
-  parComparison: {
-    marginTop: 4,
-  },
-  overPar: {
-    color: '#d32f2f', // Red for over par
-  },
-  underPar: {
-    color: '#388e3c', // Green for under par
-  },
-  atPar: {
-    color: '#666', // Gray for at par
+  scoreText: {
+    fontSize: 18,
   },
   loadingContainer: {
     flex: 1,
