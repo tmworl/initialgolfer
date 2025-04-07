@@ -292,17 +292,23 @@ As you analyze this data, focus on these high-value dimensions:
 
 Remember to stay grounded in the data provided. While you should make reasonable inferences, don't invent techniques or specifics that aren't supported by the data. Be specific and concise, focusing on insights that have the greatest potential impact on scoring.
 
-Please provide your insights in a structured JSON format with the following fields:
+Please provide your insights as an array of cards in this JSON format:
 {
-  "summary": "2-3 sentence overview of the player's game across analyzed rounds",
-  "primaryIssue": "The #1 area consistently costing strokes (1 sentence)",
-  "reason": "Why this issue is costly in terms of the sequence of shots in a hole or round (2-3 sentences explaining the impact)",
-  "practiceFocus": "Specific practice recommendation based on patterns across rounds",
-  "managementTip": "One specific course management tip to address the primary issue",
-  "progress": "Note any improvement trends across the analyzed rounds. If no clear progress pattern exists, leave this as null."
+  "cards": [{
+    "id": string,           // Unique identifier for each insight
+    "title": string,        // Dynamic card title based on the insight
+    "content": string,      // Main insight content
+    "type": string,         // "sequence", "spatial", "temporal", "pattern"
+    "priority": number,     // Display order (1 highest)
+    "icon": {
+      "name": string,      // Ionicons name
+      "color": string      // Optional hex color
+    },
+    "variant": string     // "standard", "highlight", "alert", "success"
+  }]
 }
 
-Your response should be formatted as valid JSON that can be parsed directly. Do not include any explanatory text outside the JSON structure.`;
+Generate as many cards as needed to convey valuable insights. Each card should focus on a specific aspect of the player's game. Order cards by importance using the priority field.`;
     
     // Complete prompt with real golf data
     const fullPrompt = `${promptContent}\n\nGolf rounds data: ${JSON.stringify(golfData)}`;
