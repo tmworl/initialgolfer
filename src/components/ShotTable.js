@@ -1,7 +1,7 @@
 // src/components/ShotTable.js
 //
-// Enhanced with strategic display layer transformation to optimize visual density
-// while maintaining complete data model integrity for analytics pipeline continuity
+// Architecture refactoring with strategic display layer transformation 
+// to maintain data model integrity while enhancing typography consistency
 
 import React from "react";
 import { View, TouchableOpacity, StyleSheet, Dimensions } from "react-native";
@@ -9,9 +9,19 @@ import { Ionicons } from "@expo/vector-icons";
 import Typography from "../ui/components/Typography";
 import theme from "../ui/theme";
 
-// Define shot types and outcomes with color coding
-const shotTypes = ["Tee Shot", "Long Shot", "Approach", "Chip", "Putts", "Sand", "Penalties"];
-const outcomes = ["On Target", "Slightly Off", "Recovery Needed"];
+// ========== DOMAIN MODEL CONSTANTS ==========
+// Define shot types and outcomes with color coding - extracted to module level
+const SHOT_TYPES = ["Tee Shot", "Long Shot", "Approach", "Chip", "Putts", "Sand", "Penalties"];
+
+// Display transformation mapping - decoupled from render logic for enhanced maintainability
+const OUTCOME_DISPLAY_MAPPING = {
+  "On Target": "On Target",
+  "Slightly Off": "Slightly Off", 
+  "Recovery Needed": "Bad"
+};
+
+// Domain-specific utility function for outcome display transformation
+const getDisplayOutcome = (outcome) => OUTCOME_DISPLAY_MAPPING[outcome] || outcome;
 
 // Get screen width for layout calculations
 const screenWidth = Dimensions.get('window').width;
@@ -21,8 +31,7 @@ const screenWidth = Dimensions.get('window').width;
  * 
  * Displays a table of shot types and outcomes for tracking golf shots.
  * This is a core data collection interface that directly feeds our analytics
- * engine and premium insights feature, making visual clarity and intuitive
- * interaction essential to high-quality data collection that drives conversion.
+ * engine and premium insights feature.
  * 
  * @param {Object} props
  * @param {Object} props.shotCounts - Current shot count data
@@ -40,11 +49,6 @@ export default function ShotTable({ shotCounts, activeColumn, setActiveColumn, a
     );
   }
 
-  // Display transformation layer - preserves data model while optimizing visual interface
-  const displayOutcome = (outcome) => {
-    return outcome === "Recovery Needed" ? "Bad" : outcome;
-  };
-
   // Function to get color for outcome column headers
   const getOutcomeColor = (outcome) => {
     switch (outcome) {
@@ -58,6 +62,9 @@ export default function ShotTable({ shotCounts, activeColumn, setActiveColumn, a
         return "#f5f5f5"; // Default gray
     }
   };
+
+  // Extract outcomes from the first shot type to ensure we maintain data model integrity
+  const outcomes = Object.keys(shotCounts[SHOT_TYPES[0]] || {});
 
   return (
     <View style={styles.container}>
@@ -84,24 +91,20 @@ export default function ShotTable({ shotCounts, activeColumn, setActiveColumn, a
             <Typography 
               variant="body" 
               weight={activeColumn === outcome ? "bold" : "normal"}
-              style={[
-                styles.headerText,
-                // No need for smaller text since we're using shorter display label
-                // outcome === "Recovery Needed" ? styles.smallerHeaderText : null
-              ]}
+              style={styles.headerText}
             >
-              {displayOutcome(outcome)}
+              {getDisplayOutcome(outcome)}
             </Typography>
           </TouchableOpacity>
         ))}
       </View>
       
       {/* Data Rows */}
-      {shotTypes.map((type) => (
+      {SHOT_TYPES.map((type) => (
         <View key={type} style={styles.dataRow}>
           {/* Shot Type */}
           <View style={styles.shotTypeCell}>
-            <Typography variant="body" weight="medium" style={styles.shotTypeText}>
+            <Typography variant="body" weight="medium" style={styles.headerText}>
               {type}
             </Typography>
           </View>
@@ -138,7 +141,11 @@ export default function ShotTable({ shotCounts, activeColumn, setActiveColumn, a
                       <Typography variant="button" color="#fff" style={styles.buttonText}>-</Typography>
                     </TouchableOpacity>
                     
-                    <Typography variant="body" weight="bold" style={styles.countText}>
+                    <Typography 
+                      variant="body" 
+                      weight="bold" 
+                      style={styles.countText}
+                    >
                       {count}
                     </Typography>
                     
@@ -151,9 +158,9 @@ export default function ShotTable({ shotCounts, activeColumn, setActiveColumn, a
                   </View>
                 ) : (
                   <Typography 
-                    variant={count > 0 ? "body" : "body"}
+                    variant="body"
                     weight={count > 0 ? "bold" : "normal"}
-                    color={count > 0 ? theme.colors.primary : null}
+                    color={count > 0 ? theme.colors.primary : theme.colors.text}
                     style={styles.countValueText}
                   >
                     {count}
@@ -201,33 +208,32 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   activeOutcomeCell: {
-    width: '44%', // Reduced slightly from 45%
+    width: '44%', // Maintains existing architecture
   },
   inactiveOutcomeCell: {
-    width: '18%', // Increased slightly from 15%
+    width: '18%', // Maintains existing architecture
   },
   hasValueCell: {
     backgroundColor: '#f8f8f8',
   },
   headerText: {
     textAlign: 'center',
+    // Typography variant handles font size through the design system
   },
-  smallerHeaderText: {
-    fontSize: 12, // Even smaller for long text - no longer needed with display transformation
-  },
-  shotTypeText: {
-    fontSize: 14, // Reduced from 16
+  countValueText: {
+    textAlign: 'center',
+    // Typography variant handles font size through the design system
   },
   controlsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
-    paddingHorizontal: 4, // Reduced from 8
+    paddingHorizontal: 4, // Maintaining existing architecture - will be addressed in layout refactoring
   },
   button: {
-    width: 36, // Reduced from 44
-    height: 36, // Reduced from 44
+    width: 36, // Maintaining existing architecture - will be addressed in layout refactoring
+    height: 36, // Maintaining existing architecture - will be addressed in layout refactoring
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: theme.colors.primary,
@@ -238,18 +244,10 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   buttonText: {
-    fontSize: 18, // Reduced from 20
+    fontSize: 18, // Retaining existing button text size
   },
   countText: {
-    fontSize: 16, // Reduced from 18
     textAlign: "center",
-    minWidth: 30, // Reduced from 35
-  },
-  countValueText: {
-    fontSize: 14, // Reduced from 16
-  },
-  highlightedCountText: {
-    fontSize: 16, // Reduced from 18
-    color: theme.colors.primary,
+    minWidth: 30, // Retaining existing count text constraints
   }
 });

@@ -1,4 +1,5 @@
-// src/components/InsightCard.js
+// Modified version of src/components/InsightCard.js with text containment improvements
+
 import React from "react";
 import { View, StyleSheet, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -12,17 +13,8 @@ import Button from "../ui/components/Button";
  * 
  * A strategic monetization surface for delivering insights with configurable
  * conversion touchpoints and premium-exclusive features.
- * 
- * @param {Object} props
- * @param {string} props.title - Required title drives engagement metrics
- * @param {string|ReactNode} props.content - Primary value delivery
- * @param {string} props.variant - Visual treatment strategy (standard, highlight, alert, success)
- * @param {string} props.iconName - Ionicons identifier for contextual recognition
- * @param {string} props.ctaText - Call-to-action text for conversion
- * @param {Function} props.ctaAction - Conversion action handler
- * @param {Function} props.onRefresh - Premium-exclusive refresh capability
- * @param {boolean} props.loading - Loading state indicator
- * @param {Object} props.style - Custom style overrides
+ * MODIFIED FOR TEXT CONTAINMENT: Ensures all text content remains inside card boundaries
+ * while allowing flexible height expansion.
  */
 const InsightCard = ({
   title,
@@ -46,7 +38,7 @@ const InsightCard = ({
           <View style={[styles.iconContainer, variantStyle.iconContainer]}>
             <Ionicons name={iconName} size={24} color={variantStyle.iconColor || theme.colors.primary} />
           </View>
-          <Typography variant="subtitle">{title}</Typography>
+          <Typography variant="subtitle" style={styles.headerText}>{title}</Typography>
         </View>
         <Typography variant="secondary" italic>Analyzing your golf game...</Typography>
       </Card>
@@ -55,7 +47,7 @@ const InsightCard = ({
   
   return (
     <Card style={[styles.card, variantStyle.card, style]}>
-      {/* Card header with configurable icon and title */}
+      {/* Card header with configurable icon and title - IMPROVED FOR TEXT WRAPPING */}
       <View style={styles.header}>
         <View style={styles.leftHeader}>
           <View style={[styles.iconContainer, variantStyle.iconContainer]}>
@@ -65,12 +57,16 @@ const InsightCard = ({
               color={variantStyle.iconColor || theme.colors.primary} 
             />
           </View>
-          <Typography 
-            variant="subtitle" 
-            color={variantStyle.titleColor}
-          >
-            {title}
-          </Typography>
+          {/* Title now has flex:1 and properly wraps */}
+          <View style={styles.titleContainer}>
+            <Typography 
+              variant="subtitle" 
+              color={variantStyle.titleColor}
+              style={styles.headerText}
+            >
+              {title}
+            </Typography>
+          </View>
         </View>
         
         {/* Premium-exclusive refresh button */}
@@ -89,10 +85,15 @@ const InsightCard = ({
         )}
       </View>
       
-      {/* Card content with flexible rendering */}
+      {/* Card content with flexible rendering - IMPROVED FOR CONTENT EXPANSION */}
       <View style={styles.content}>
         {typeof content === 'string' ? (
-          <Typography variant="body">{content}</Typography>
+          <Typography 
+            variant="body"
+            style={styles.contentText}
+          >
+            {content}
+          </Typography>
         ) : (
           content
         )}
@@ -157,16 +158,19 @@ const styles = StyleSheet.create({
   card: {
     marginBottom: theme.spacing.medium,
     width: '100%',
+    // Remove any fixed height to allow expansion
   },
   header: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start", // Changed from center to allow title to expand vertically
     justifyContent: "space-between",
     marginBottom: theme.spacing.medium,
+    flexWrap: "wrap", // Allow wrapping for very long titles
   },
   leftHeader: {
     flexDirection: "row", 
-    alignItems: "center",
+    alignItems: "flex-start", // Changed from center
+    flex: 1, // Take available space
   },
   iconContainer: {
     width: 40,
@@ -175,10 +179,25 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginRight: theme.spacing.medium,
-    backgroundColor: "#f0f8ff", // Light blue background for the icon
+    backgroundColor: "#f0f8ff",
+    flexShrink: 0, // Prevent icon from shrinking
+  },
+  titleContainer: {
+    flex: 1, // Take remaining space
+    flexDirection: 'column',
+    justifyContent: 'center',
+  },
+  headerText: {
+    flexShrink: 1, // Allow text to shrink rather than overflow
+    flexWrap: 'wrap', // Enable text wrapping
   },
   content: {
     marginLeft: theme.spacing.xsmall,
+    // Remove any fixed height constraints
+  },
+  contentText: {
+    // Ensure text can wrap and expand vertically
+    flexWrap: 'wrap',
   },
   ctaContainer: {
     marginTop: theme.spacing.medium,
@@ -187,6 +206,8 @@ const styles = StyleSheet.create({
   refreshButton: {
     padding: theme.spacing.small,
     borderRadius: 20,
+    marginLeft: theme.spacing.small,
+    flexShrink: 0, // Prevent button from shrinking
   },
 });
 
