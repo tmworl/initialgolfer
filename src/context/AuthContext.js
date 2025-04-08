@@ -25,7 +25,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   // 'error' stores any error messages from auth operations.
   const [error, setError] = useState(null);
-  // 'userPermissions' stores the user's permission records
+  // 'userPermissions' stores the user's product permissions
   const [userPermissions, setUserPermissions] = useState([]);
 
   // Load user permissions from the database
@@ -53,10 +53,10 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Helper function to check if a user has a specific permission
-  const hasPermission = useCallback((permissionId) => {
+  // Helper function to check if a user has a specific product permission
+  const hasPermission = useCallback((productId) => {
     return userPermissions.some(
-      permission => permission.permission_id === permissionId && permission.active
+      permission => permission.permission_id === productId && permission.active
     );
   }, [userPermissions]);
 
