@@ -11,21 +11,28 @@
         "projectId": "f533582e-60df-40c6-94a0-cb0d233655f5"
       }
     },
-    "owner": "tworl",
+    "owner": "daybeam",
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
       "url": "https://u.expo.dev/f533582e-60df-40c6-94a0-cb0d233655f5"
     },
+    "icon": "./assets/icon.png",
     "android": {
-      "package": "com.tworl.golfscoretracker"
+      "package": "com.daybeam.golfimprove",
+      "icon": "./assets/android/icon.png",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/android/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      }
     },
     "ios": {
-      "bundleIdentifier": "y",
+      "bundleIdentifier": "com.daybeam.golfimprove",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "icon": "./assets/ios/icon.png"
     }
   }
 }
