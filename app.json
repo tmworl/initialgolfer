@@ -27,12 +27,14 @@
         "backgroundColor": "#FFFFFF"
       }
     },
-"ios": {
-  "bundleIdentifier": "com.daybeam.golfimprove",
-  "infoPlist": {
-    "ITSAppUsesNonExemptEncryption": false,
-    "NSLocationWhenInUseUsageDescription": "This app uses your location to calculate distances to the green and other golf course features.",
-    "NSLocationAlwaysUsageDescription": "This app uses your location to calculate distances while you play golf."
-  },
-  "icon": "./assets/ios/icon.png"
+    "ios": {
+      "bundleIdentifier": "com.daybeam.golfimprove",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "This app uses your location to calculate distances to the green and other golf course features.",
+        "NSLocationAlwaysUsageDescription": "This app uses your location to calculate distances while you play golf."
+      },
+      "icon": "./assets/ios/icon.png"
+    }
+  }
 }
