@@ -1,9 +1,9 @@
 {
   "expo": {
-    "name": "GolfScoreTracker",
-    "slug": "golfscoretracker",
+    "name": "GolfImprove",
+    "slug": "GolfImprove",
     "scheme": "mygolfapp",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "sdkVersion": "52.0.0",
     "extra": {
@@ -22,10 +22,6 @@
     "android": {
       "package": "com.daybeam.golfimprove",
       "icon": "./assets/android/icon.png",
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/android/adaptive-icon.png",
-        "backgroundColor": "#FFFFFF"
-      }
     },
     "ios": {
       "bundleIdentifier": "com.daybeam.golfimprove",

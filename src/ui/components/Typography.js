@@ -1,25 +1,29 @@
 // src/ui/components/Typography.js
 //
-// Enhanced Typography component that builds on AppText
-// Provides a consistent way to style text throughout the app
+// Enhanced typography system with optical size adjustments
+// Implements SF Pro-specific weight mapping and tracking calculations
 
 import React from 'react';
-import { Text } from 'react-native';
+import { Text, StyleSheet, Platform } from 'react-native';
+import platformDetection from '../platform/detection';
+import visualProperties from '../platform/visualProperties';
 import theme from '../theme';
 
 /**
  * Typography Component
  * 
- * An enhanced text component with consistent styling.
- * Works with your existing theme while providing more flexibility.
+ * Enhanced text component with optical size adjustments and proper vertical rhythm.
+ * Automatically applies platform-specific typography optimizations based on context.
  * 
- * @param {object} props
+ * @param {Object} props Component props
  * @param {string} props.variant - Text style variant (title, subtitle, body, secondary, button, caption)
  * @param {string} props.align - Text alignment (left, center, right)
  * @param {string} props.color - Text color (can be theme colors or direct values)
  * @param {string} props.weight - Font weight (normal, medium, semibold, bold)
  * @param {boolean} props.italic - Whether to use italic style
- * @param {object} props.style - Additional custom styles
+ * @param {number} props.size - Custom font size override
+ * @param {number} props.opacity - Text opacity for visual hierarchy
+ * @param {Object} props.style - Additional custom styles
  * @param {React.ReactNode} props.children - The text content
  */
 const Typography = ({
@@ -29,55 +33,97 @@ const Typography = ({
   color,
   weight,
   italic = false,
+  size,
+  opacity,
   style,
   ...otherProps
 }) => {
   // Get base style from theme based on variant
-  const variantStyle = theme.typography.styles[variant] || theme.typography.styles.body;
+  const baseStyle = theme.typography.styles[variant] || theme.typography.styles.body;
   
-  // Determine which font weight to use
-  let fontWeight = variantStyle.fontWeight;
+  // Determine effective font size (prop override or variant default)
+  const fontSize = size || baseStyle.fontSize;
+  
+  // Determine effective font weight
+  let fontWeight = baseStyle.fontWeight;
   if (weight) {
     switch (weight) {
       case 'normal':
-        fontWeight = theme.typography.fontWeight.normal;
+      case 'regular':
+        fontWeight = '400';
         break;
       case 'medium':
-        fontWeight = theme.typography.fontWeight.medium;
+        fontWeight = '500';
         break;
       case 'semibold':
-        fontWeight = theme.typography.fontWeight.semibold;
+        fontWeight = '600';
         break;
       case 'bold':
-        fontWeight = theme.typography.fontWeight.bold;
+        fontWeight = '700';
         break;
       default:
-        fontWeight = weight; // Allow direct values like '500'
+        fontWeight = weight; // Allow direct numeric weights
     }
   }
   
-  // Determine color value
-  let colorValue = variantStyle.color;
+  // Apply optical adjustments based on size and weight
+  // This is critical for iOS 18's typography system which uses SF Pro optical sizes
+  const opticalProps = visualProperties.getOpticalTypography(fontSize, fontWeight);
+  
+  // Determine color value (prop > theme color > variant default)
+  let textColor = baseStyle.color;
   if (color) {
-    if (color in theme.colors) {
-      colorValue = theme.colors[color];
-    } else {
-      colorValue = color; // Use direct color value
-    }
+    textColor = theme.colors[color] || color; // Use theme color or direct value
   }
   
-  // Build the combined style
+  // Construct the final text style with all adjustments
   const textStyle = {
-    ...variantStyle,
-    fontWeight,
-    fontStyle: italic ? 'italic' : 'normal',
-    color: colorValue,
+    // Base variant style
+    ...baseStyle,
+    
+    // Optical size adjustments
+    fontSize: opticalProps.fontSize,
+    fontWeight: opticalProps.fontWeight,
+    lineHeight: opticalProps.lineHeight,
+    letterSpacing: opticalProps.letterSpacing,
+    
+    // Optional fontFamily from optical props
+    ...(opticalProps.fontFamily ? { fontFamily: opticalProps.fontFamily } : {}),
+    
+    // Style customizations
+    color: textColor,
     textAlign: align,
+    fontStyle: italic ? 'italic' : 'normal',
+    opacity: opacity !== undefined ? opacity : 1,
   };
+  
+  // Apply platform-specific text optimizations
+  const platformStyle = {};
+  
+  if (platformDetection.isIOS) {
+    // iOS-specific text rendering optimizations
+    platformStyle.fontVariant = baseStyle.fontSize >= 20 ? ['proportional-nums'] : undefined;
+    
+    // Apply SF Pro Text for smaller sizes, SF Pro Display for larger
+    if (!baseStyle.fontFamily) {
+      platformStyle.fontFamily = fontSize >= 20 ? undefined : undefined; // iOS uses system font
+    }
+  } else if (platformDetection.isAndroid) {
+    // Android-specific text rendering optimizations
+    platformStyle.includeFontPadding = false; // Remove extra padding for more precise control
+    
+    // Adjust line height slightly to match iOS text placement
+    platformStyle.lineHeight = textStyle.lineHeight * 1.05;
+    
+    // Apply Roboto by default unless fontFamily is explicitly set
+    if (!baseStyle.fontFamily) {
+      platformStyle.fontFamily = 'Roboto';
+    }
+  }
   
   return (
     <Text
-      style={[textStyle, style]}
+      style={[textStyle, platformStyle, style]}
       {...otherProps}
     >
       {children}

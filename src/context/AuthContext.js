@@ -8,27 +8,37 @@ import { supabase } from "../services/supabase";
 // Create an authentication context
 export const AuthContext = createContext();
 
-// Utility function to check email verification status
+/**
+ * Email verification utility
+ * Determines if a user has verified their email based on presence of email_confirmed_at
+ */
 const checkEmailVerification = (userData) => {
   return userData && userData.email_confirmed_at ? true : false;
 };
 
-// AuthProvider wraps the entire app and provides auth state and functions
+/**
+ * AuthProvider Component
+ * 
+ * Enhanced with persistence capabilities, this provider maintains the user's
+ * authentication state across app restarts while preserving all existing
+ * functionality including email verification flows.
+ */
 export const AuthProvider = ({ children }) => {
-  // 'user' holds the currently authenticated user, or null if not authenticated.
+  // Authentication state
   const [user, setUser] = useState(null);
-  // 'emailVerified' tracks whether the user has verified their email
   const [emailVerified, setEmailVerified] = useState(false);
-  // 'pendingVerificationEmail' stores the email address awaiting verification
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState(null);
-  // 'loading' tracks whether an auth operation is in progress.
   const [loading, setLoading] = useState(true);
-  // 'error' stores any error messages from auth operations.
   const [error, setError] = useState(null);
-  // 'userPermissions' stores the user's product permissions
   const [userPermissions, setUserPermissions] = useState([]);
+  
+  // Session restoration state
+  const [sessionRestored, setSessionRestored] = useState(false);
 
-  // Load user permissions from the database
+  /**
+   * Load user permissions from the database
+   * This is a critical operation that must execute after authentication
+   */
   const loadUserPermissions = async (userId) => {
     if (!userId) return;
     
@@ -53,14 +63,20 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Helper function to check if a user has a specific product permission
+  /**
+   * Permission checking utility
+   * Memoized for performance optimization
+   */
   const hasPermission = useCallback((productId) => {
     return userPermissions.some(
       permission => permission.permission_id === productId && permission.active
     );
   }, [userPermissions]);
 
-  // Handle deep links for email verification
+  /**
+   * Deep link handler
+   * Process verification callbacks from email links
+   */
   const handleDeepLink = async (event) => {
     const url = event?.url || event;
     if (!url) return;
@@ -103,90 +119,127 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // On mount, check if a session already exists and restore verification state.
+  /**
+   * Authentication initialization and session restoration
+   * 
+   * This enhanced implementation leverages the persistent storage layer
+   * while maintaining the existing verification state management.
+   */
   useEffect(() => {
     const initAuth = async () => {
       try {
-        // Check for existing session
-        const { data } = await supabase.auth.getSession();
+        // Maintain loading state for UI feedback
+        setLoading(true);
         
-        if (data?.session?.user) {
+        // Load pending verification email from storage first
+        // This ensures unverified users maintain proper UX across restarts
+        const pendingEmail = await AsyncStorage.getItem('@GolfApp:pendingVerificationEmail');
+        if (pendingEmail) {
+          console.log("Found pending verification for:", pendingEmail);
+          setPendingVerificationEmail(pendingEmail);
+        }
+        
+        // Check for existing session with enhanced error handling
+        // The Supabase client is now configured to restore from AsyncStorage
+        const { data, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error("Session restoration error:", error);
+          // Continue execution to allow fallback authentication options
+        } else if (data?.session?.user) {
+          console.log("Session restored for user:", data.session.user.email);
+          
+          // Update auth state with restored session
           setUser(data.session.user);
-          // Set email verification status based on email_confirmed_at
           setEmailVerified(checkEmailVerification(data.session.user));
           
-          // Load user permissions
+          // Load user permissions on session restoration
           await loadUserPermissions(data.session.user.id);
         } else {
-          // No active session, check for pending verification
-          const pendingEmail = await AsyncStorage.getItem('@GolfApp:pendingVerificationEmail');
-          if (pendingEmail) {
-            setPendingVerificationEmail(pendingEmail);
-          }
+          console.log("No active session found in storage");
         }
+        
+        // Mark session restoration as complete regardless of outcome
+        setSessionRestored(true);
       } catch (err) {
-        console.error("Error checking auth session:", err);
+        console.error("Critical error in authentication initialization:", err);
+        // Mark session restoration as complete to unblock UI
+        setSessionRestored(true);
       } finally {
         setLoading(false);
       }
     };
 
+    // Initialize authentication
     initAuth();
 
-    // Subscribe to auth state changes. This ensures our UI always reflects the latest auth state.
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+    /**
+     * Auth state change subscription
+     * 
+     * This synchronizes the UI with auth state changes from any source:
+     * - Manual login/logout
+     * - Session restoration
+     * - Token refresh
+     * - External auth events (deep links)
+     */
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log("Auth state changed:", event);
       
+      // Update internal state based on auth changes
       if (session?.user) {
         setUser(session.user);
-        // Update email verification status
-        const isVerified = checkEmailVerification(session.user);
-        setEmailVerified(isVerified);
+        setEmailVerified(checkEmailVerification(session.user));
         
         // Load user permissions
-        loadUserPermissions(session.user.id);
+        await loadUserPermissions(session.user.id);
         
-        // If user is now verified and we had a pending verification, clear it
-        if (isVerified && pendingVerificationEmail) {
+        // Handle verification state
+        if (checkEmailVerification(session.user) && pendingVerificationEmail) {
           setPendingVerificationEmail(null);
-          AsyncStorage.removeItem('@GolfApp:pendingVerificationEmail');
+          await AsyncStorage.removeItem('@GolfApp:pendingVerificationEmail');
         }
       } else {
+        // Clear auth state on logout or session expiration
         setUser(null);
         setEmailVerified(false);
-        setUserPermissions([]); // Clear permissions when user logs out
+        setUserPermissions([]);
       }
     });
 
-    // Set up deep link handling
-    // First, check if the app was opened with a URL
+    // Deep link handling setup
     Linking.getInitialURL().then(url => {
       if (url) handleDeepLink(url);
     });
-
-    // Then listen for future URL events
     const linkingListener = Linking.addEventListener('url', handleDeepLink);
 
-    // Clean up subscriptions when the component unmounts.
+    // Cleanup resources on unmount
     return () => {
-      authListener.subscription.unsubscribe();
+      if (authListener?.subscription) {
+        authListener.subscription.unsubscribe();
+      }
       linkingListener.remove();
     };
   }, [pendingVerificationEmail]);
 
-  // signIn: Calls Supabase to sign in with email and password.
+  /**
+   * Enhanced sign-in implementation
+   * Leverages persistence layer automatically through supabase client
+   */
   const signIn = async (email, password) => {
     setLoading(true);
     setError(null);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({ 
+        email, 
+        password
+      });
+      
       if (error) {
         setError(error.message);
       } else {
+        // Session will be automatically persisted by the enhanced supabase client
         setUser(data.user);
         setEmailVerified(checkEmailVerification(data.user));
-        
-        // Load user permissions after successful sign in
         await loadUserPermissions(data.user.id);
       }
     } catch (err) {
@@ -197,8 +250,10 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // signUp: Calls Supabase to create a new account.
-  // Note: You can adjust the emailRedirectTo option based on your native environment.
+  /**
+   * Sign-up implementation
+   * Creates account and manages verification state
+   */
   const signUp = async (email, password) => {
     setLoading(true);
     setError(null);
@@ -207,19 +262,18 @@ export const AuthProvider = ({ children }) => {
         email,
         password,
         options: {
-          emailRedirectTo: "mygolfapp://login-callback" // Use our configured redirect
+          emailRedirectTo: "mygolfapp://login-callback"
         }
       });
       
       if (error) {
-        // Check specifically for duplicate account errors
         if (error.message.includes("already registered") || error.code === "23505") {
           setError("This email is already registered. Please sign in instead.");
         } else {
           setError(error.message);
         }
       } else {
-        // Store the user but flag as unverified
+        // Store user but flag as unverified
         setUser(data.user);
         setEmailVerified(false);
         
@@ -235,12 +289,13 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // resendVerificationEmail: Resends the verification email.
+  /**
+   * Verification email resend functionality
+   */
   const resendVerificationEmail = async (email = null) => {
     setLoading(true);
     setError(null);
     try {
-      // Use provided email or fall back to pending email
       const emailToVerify = email || pendingVerificationEmail;
       
       if (!emailToVerify) {
@@ -258,12 +313,9 @@ export const AuthProvider = ({ children }) => {
       
       if (error) {
         setError(error.message);
-      } else {
-        // If a new email was provided, update the pending verification
-        if (email && email !== pendingVerificationEmail) {
-          setPendingVerificationEmail(email);
-          await AsyncStorage.setItem('@GolfApp:pendingVerificationEmail', email);
-        }
+      } else if (email && email !== pendingVerificationEmail) {
+        setPendingVerificationEmail(email);
+        await AsyncStorage.setItem('@GolfApp:pendingVerificationEmail', email);
       }
     } catch (err) {
       setError("Failed to resend verification email");
@@ -273,19 +325,31 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // signOut: Calls Supabase to end the session.
+  /**
+   * Enhanced sign-out with complete persistence cleanup
+   * 
+   * This implementation ensures that all persisted authentication data
+   * is properly cleared during logout, preventing session leakage.
+   */
   const signOut = async () => {
     setLoading(true);
     try {
+      // The enhanced supabase client will automatically clear persisted session
       const { error } = await supabase.auth.signOut();
+      
       if (error) {
         setError(error.message);
       } else {
+        // Clear all auth-related state
         setUser(null);
         setEmailVerified(false);
         setPendingVerificationEmail(null);
-        setUserPermissions([]); // Clear permissions on sign out
+        setUserPermissions([]);
+        
+        // Clear any app-specific storage
         await AsyncStorage.removeItem('@GolfApp:pendingVerificationEmail');
+        
+        console.log("Session terminated and storage cleared");
       }
     } catch (err) {
       setError("Failed to sign out");
@@ -295,7 +359,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Provide the state and functions to any child component.
+  // Expose auth context to the application
   return (
     <AuthContext.Provider value={{ 
       user, 
@@ -309,7 +373,8 @@ export const AuthProvider = ({ children }) => {
       pendingVerificationEmail,
       resendVerificationEmail,
       userPermissions,
-      hasPermission
+      hasPermission,
+      sessionRestored // New flag to indicate session restoration completion
     }}>
       {children}
     </AuthContext.Provider>
