@@ -120,6 +120,7 @@ const DistanceIndicator = ({
   
   // Start location tracking
   const startLocationTracking = async () => {
+    console.log('🚀 Starting location tracking...');
     // Check if we need to request permission
     if (hasPermission === null) {
       const granted = await requestLocationPermission();
@@ -141,6 +142,8 @@ const DistanceIndicator = ({
         distanceInterval: 5  // Or when moved 5 meters
       };
       
+      console.log('⚙️ Location options:', options);
+      
       // Start watching position
       const subscription = await Location.watchPositionAsync(
         options,
@@ -152,7 +155,7 @@ const DistanceIndicator = ({
       setLocationError(null);
       
     } catch (err) {
-      console.error('Error starting location tracking:', err);
+      console.error('❌ Location tracking error:', err);
       setLocationError('GPS error');
       setUsingGPS(false);
       
@@ -172,7 +175,16 @@ const DistanceIndicator = ({
   
   // Handle location updates
   const handleLocationUpdate = (location) => {
+    console.log('📍 Location Update:', {
+      accuracy: Math.round(location.coords.accuracy),
+      lat: location.coords.latitude.toFixed(6),
+      lng: location.coords.longitude.toFixed(6),
+      time: new Date(location.timestamp).toLocaleTimeString(),
+      usingGPS: true
+    });
+
     if (!location || !location.coords) {
+      console.log('❌ Invalid location data received');
       setLocationError('Invalid location data');
       return;
     }
@@ -181,6 +193,13 @@ const DistanceIndicator = ({
     
     // Get green coordinates
     const { center, front, back } = findGreenCoordinates();
+    
+    // Log green coordinates and calculated distances
+    console.log('🎯 Green Coordinates:', {
+      center: center ? `${center.lat.toFixed(6)}, ${center.lng.toFixed(6)}` : 'N/A',
+      front: front ? `${front.lat.toFixed(6)}, ${front.lng.toFixed(6)}` : 'N/A',
+      back: back ? `${back.lat.toFixed(6)}, ${back.lng.toFixed(6)}` : 'N/A'
+    });
     
     // Calculate distances if we have coordinates
     if (center) {

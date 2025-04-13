@@ -228,6 +228,10 @@ serve(async (req) => {
                       .from('courses')
                       .insert({
                         ...course,
+                        // Add uniqueness to generic course names
+                        name: course.courseName === "18-hole course" || course.courseName === "9-hole course" 
+                          ? `${course.clubName} - ${course.courseName}`
+                          : course.courseName,
                         created_at: new Date().toISOString()
                       })
                       .select()
