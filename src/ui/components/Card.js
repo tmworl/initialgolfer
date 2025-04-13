@@ -1,19 +1,26 @@
 // src/ui/components/Card.js
 //
-// Card component with platform-specific styling
-// Provides native look and feel for both iOS and Android
+// Enhanced card component with iOS 18 surface treatments
+// Implements dynamic corner radius and material system integration
 
-import React from 'react';
+import React, { useState } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
+import platformDetection from '../platform/detection';
+import visualProperties from '../platform/visualProperties';
+import BackdropMaterial, { MATERIAL_TYPES } from './BackdropMaterial';
 import theme from '../theme';
 
 /**
  * Card Component
  * 
- * A flexible card container with platform-specific styling.
+ * Enhanced surface container with dynamic corner radius and depth effects.
+ * Supports translucent materials on capable devices with proper iOS 18 styling.
  * 
- * @param {Object} props
+ * @param {Object} props Component props
  * @param {string} props.variant - Card style variant (default, elevated, outlined, flat)
+ * @param {number} props.elevation - Z-index elevation (0-24)
+ * @param {boolean} props.translucent - Whether to use backdrop material effect
+ * @param {string} props.materialType - Type of backdrop material (thin, regular, thick)
  * @param {boolean} props.noPadding - Remove default padding
  * @param {Object} props.style - Additional styles for the card
  * @param {React.ReactNode} props.children - Card content
@@ -21,28 +28,79 @@ import theme from '../theme';
 const Card = ({
   children,
   variant = 'default',
+  elevation = 1,
+  translucent = false,
+  materialType = MATERIAL_TYPES.REGULAR,
   noPadding = false,
   style,
   ...otherProps
 }) => {
-  // Get platform-specific styles
-  const platformStyles = Platform.select({
-    ios: styles.cardIOS,
-    android: styles.cardAndroid,
-    default: styles.cardDefault,
-  });
+  // Track card dimensions for dynamic corner radius calculation
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   
+  // Handle layout changes to measure dimensions
+  const handleLayout = (event) => {
+    const { width, height } = event.nativeEvent.layout;
+    if (width !== dimensions.width || height !== dimensions.height) {
+      setDimensions({ width, height });
+    }
+  };
+  
+  // Calculate corner radius based on card dimensions
+  // This is a key aspect of iOS 18's adaptive radius system
+  const cornerRadius = dimensions.width > 0 
+    ? visualProperties.getCornerRadius(dimensions)
+    : theme.layout.borderRadius.medium; // Fallback
+  
+  // Get shadow parameters based on elevation
+  const shadowProps = visualProperties.getShadowParams(elevation);
+  
+  // Determine base styles based on variant
+  const getVariantStyle = () => {
+    switch (variant) {
+      case 'elevated':
+        return styles.elevated;
+      case 'outlined':
+        return styles.outlined;
+      case 'flat':
+        return styles.flat;
+      default:
+        return styles.default;
+    }
+  };
+  
+  // Combine all styles
+  const cardStyles = [
+    styles.base,
+    getVariantStyle(),
+    {
+      borderRadius: cornerRadius,
+      ...shadowProps
+    },
+    noPadding && styles.noPadding,
+    style
+  ];
+  
+  // Use translucent backdrop material on capable devices when requested
+  // This creates the iOS 18 material effect with proper blur and vibrancy
+  if (translucent && platformDetection.supportsBlurEffects) {
+    return (
+      <BackdropMaterial
+        type={materialType}
+        style={cardStyles}
+        onLayout={handleLayout}
+        {...otherProps}
+      >
+        {children}
+      </BackdropMaterial>
+    );
+  }
+  
+  // Fallback to standard View on devices that don't support backdrop material
   return (
     <View
-      style={[
-        styles.base,
-        platformStyles,
-        variant === 'elevated' && styles.elevated,
-        variant === 'outlined' && styles.outlined,
-        variant === 'flat' && styles.flat,
-        noPadding && styles.noPadding,
-        style
-      ]}
+      style={cardStyles}
+      onLayout={handleLayout}
       {...otherProps}
     >
       {children}
@@ -50,16 +108,15 @@ const Card = ({
   );
 };
 
-// Card header component
-Card.Header = ({ children, style, ...otherProps }) => (
-  <View style={[styles.header, style]} {...otherProps}>
+// Add Header and Footer sub-components for consistent composition patterns
+Card.Header = ({ children, style, ...props }) => (
+  <View style={[styles.header, style]} {...props}>
     {children}
   </View>
 );
 
-// Card footer component
-Card.Footer = ({ children, style, ...otherProps }) => (
-  <View style={[styles.footer, style]} {...otherProps}>
+Card.Footer = ({ children, style, ...props }) => (
+  <View style={[styles.footer, style]} {...props}>
     {children}
   </View>
 );
@@ -69,141 +126,77 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: theme.spacing.medium,
   },
-  
-  // Platform-specific styles
-  cardIOS: {
-    borderRadius: 10, // iOS prefers more rounded corners
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    // iOS shadow styling
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  
-  cardAndroid: {
-    borderRadius: 4, // Material Design uses smaller radius
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    // Android elevation
-    elevation: 2,
-  },
-  
-  cardDefault: {
-    borderRadius: 8,
+  default: {
     backgroundColor: '#FFFFFF',
     padding: 16,
-    // Default shadow for web or other platforms
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1.5,
-    elevation: 2,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.15,
+        shadowRadius: 3,
+      },
+      android: {
+        elevation: 2,
+      }
+    }),
   },
-  
-  // Variants
-  elevated: Platform.select({
-    ios: {
-      shadowOpacity: 0.15,
-      shadowRadius: 6,
-      shadowOffset: { width: 0, height: 4 },
-    },
-    android: {
-      elevation: 4,
-    },
-    default: {
-      shadowOpacity: 0.25,
-      shadowRadius: 4,
-      shadowOffset: { width: 0, height: 2 },
-      elevation: 4,
-    },
-  }),
-  
-  outlined: Platform.select({
-    ios: {
-      shadowOpacity: 0,
-      borderWidth: 1,
-      borderColor: '#E0E0E0',
-    },
-    android: {
-      elevation: 0,
-      borderWidth: 1,
-      borderColor: '#E0E0E0',
-    },
-    default: {
-      shadowOpacity: 0,
-      elevation: 0,
-      borderWidth: 1,
-      borderColor: '#E0E0E0',
-    },
-  }),
-  
-  flat: Platform.select({
-    ios: {
-      backgroundColor: '#F5F5F5',
-      shadowOpacity: 0,
-    },
-    android: {
-      backgroundColor: '#F5F5F5',
-      elevation: 0,
-    },
-    default: {
-      backgroundColor: '#F5F5F5',
-      shadowOpacity: 0,
-      elevation: 0,
-    },
-  }),
-  
+  elevated: {
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.2,
+        shadowRadius: 6,
+      },
+      android: {
+        elevation: 4,
+      }
+    }),
+  },
+  outlined: {
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    borderWidth: 1,
+    borderColor: theme.colors.border || '#E0E0E0',
+    ...Platform.select({
+      ios: {
+        shadowOpacity: 0,
+      },
+      android: {
+        elevation: 0,
+      }
+    }),
+  },
+  flat: {
+    backgroundColor: '#F5F5F5',
+    padding: 16,
+    ...Platform.select({
+      ios: {
+        shadowOpacity: 0,
+      },
+      android: {
+        elevation: 0,
+      }
+    }),
+  },
   noPadding: {
     padding: 0,
-    paddingVertical: 0,
-    paddingHorizontal: 0,
   },
-  
-  header: Platform.select({
-    ios: {
-      paddingBottom: 12,
-      marginBottom: 8,
-      borderBottomWidth: 1,
-      borderBottomColor: '#F0F0F0',
-    },
-    android: {
-      paddingBottom: 12,
-      marginBottom: 8,
-      borderBottomWidth: 1,
-      borderBottomColor: '#EEEEEE',
-    },
-    default: {
-      paddingBottom: 12,
-      marginBottom: 8,
-      borderBottomWidth: 1,
-      borderBottomColor: '#F0F0F0',
-    },
-  }),
-  
-  footer: Platform.select({
-    ios: {
-      paddingTop: 12,
-      marginTop: 8,
-      borderTopWidth: 1,
-      borderTopColor: '#F0F0F0',
-    },
-    android: {
-      paddingTop: 12,
-      marginTop: 8,
-      borderTopWidth: 1,
-      borderTopColor: '#EEEEEE',
-    },
-    default: {
-      paddingTop: 12,
-      marginTop: 8,
-      borderTopWidth: 1,
-      borderTopColor: '#F0F0F0',
-    },
-  }),
+  header: {
+    paddingBottom: 12,
+    marginBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#F0F0F0',
+  },
+  footer: {
+    paddingTop: 12,
+    marginTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#F0F0F0',
+  },
 });
 
 export default Card;

@@ -22,10 +22,6 @@
     "android": {
       "package": "com.daybeam.golfimprove",
       "icon": "./assets/android/icon.png",
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/android/adaptive-icon.png",
-        "backgroundColor": "#FFFFFF"
-      }
     },
     "ios": {
       "bundleIdentifier": "com.daybeam.golfimprove",

@@ -14,13 +14,14 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Layout from "../ui/Layout";
 import theme from "../ui/theme";
-import { createRound, saveHoleData, completeRound } from "../services/roundservice";
+import { createRound, saveHoleData, completeRound, deleteAbandonedRound } from "../services/roundservice";
 import ShotTable from "../components/ShotTable";
 import HoleNavigator from "../components/HoleNavigator";
 import { AuthContext } from "../context/AuthContext";
 import Typography from "../ui/components/Typography";
 import Button from "../ui/components/Button";
 import DistanceIndicator from '../components/DistanceIndicator';
+import { useFocusEffect } from '@react-navigation/native';
 
 /**
  * TrackerScreen Component
@@ -74,6 +75,56 @@ export default function TrackerScreen({ navigation }) {
   const [course, setCourse] = useState(null);                   // Current course data
   const [courseDetails, setCourseDetails] = useState(null);     // Detailed course data from database
 
+  // Update the iOS navigation interception
+  useFocusEffect(
+    useCallback(() => {
+      const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+        // If we have an active round, prevent ANY navigation and show confirmation
+        if (round && round.id) {
+          // Always prevent the default navigation
+          e.preventDefault();
+          
+          Alert.alert(
+            "Exit Round?",
+            "Are you sure you want to exit this round? Your progress will not be saved.",
+            [
+              { text: "Stay", style: "cancel" },
+              { 
+                text: "Exit", 
+                style: "destructive",
+                onPress: async () => {
+                  try {
+                    setLoading(true);
+                    
+                    // Delete the round from the database
+                    await deleteAbandonedRound(round.id);
+                    
+                    // Clean up AsyncStorage
+                    await AsyncStorage.removeItem(`round_${round.id}_holes`);
+                    await AsyncStorage.removeItem("currentRound");
+                    
+                    console.log("Round abandoned and cleaned up successfully");
+                    
+                    // Dispatch the originally prevented action
+                    navigation.dispatch(e.data.action);
+                  } catch (error) {
+                    console.error("Error abandoning round:", error);
+                    // Still navigate even if cleanup fails
+                    navigation.dispatch(e.data.action);
+                  } finally {
+                    setLoading(false);
+                  }
+                }
+              }
+            ]
+          );
+        }
+      });
+
+      return unsubscribe;
+    }, [navigation, round, setLoading])
+  );
+
   // Add this effect to handle hardware back button on Android
   useEffect(() => {
     const backHandler = BackHandler.addEventListener(
@@ -82,17 +133,36 @@ export default function TrackerScreen({ navigation }) {
         // Show confirmation dialog instead of going back immediately
         Alert.alert(
           "Exit Round?",
-          "Are you sure you want to exit this round? Your progress will be saved.",
+          "Are you sure you want to exit this round? Your progress will not be saved.",
           [
-            { text: "Cancel", style: "cancel", onPress: () => {} },
+            { text: "Stay", style: "cancel", onPress: () => {} },
             { 
               text: "Exit", 
               style: "destructive",
-              onPress: () => {
-                // Save current progress and navigate back
-                saveCurrentHoleToStorage().then(() => {
+              onPress: async () => {
+                try {
+                  setLoading(true); // Show loading state
+                  
+                  if (round && round.id) {
+                    // Delete the round from the database
+                    await deleteAbandonedRound(round.id);
+                    
+                    // Clean up AsyncStorage
+                    await AsyncStorage.removeItem(`round_${round.id}_holes`);
+                    await AsyncStorage.removeItem("currentRound");
+                    
+                    console.log("Round abandoned and cleaned up successfully");
+                  }
+                  
+                  // Navigate back
                   navigation.goBack();
-                });
+                } catch (error) {
+                  console.error("Error abandoning round:", error);
+                  // Still navigate back even if cleanup fails
+                  navigation.goBack();
+                } finally {
+                  setLoading(false);
+                }
               }
             }
           ]
@@ -102,7 +172,7 @@ export default function TrackerScreen({ navigation }) {
     );
 
     return () => backHandler.remove();
-  }, []);
+  }, [round]);
 
   /**
    * Save the current hole data to AsyncStorage
