@@ -2,9 +2,10 @@
 //
 // Platform detection module for navigation styling system
 // Detects device capabilities and provides consistent platform information
+// ENHANCED with Material Design 3 capability detection
 
 import { Platform, Dimensions, StatusBar } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import platformDetection from '../../platform/detection';
 
 // Cache window dimensions for performance
 const { width: WINDOW_WIDTH, height: WINDOW_HEIGHT } = Dimensions.get('window');
@@ -56,8 +57,19 @@ const getBottomSpace = () => {
 
 /**
  * Get the tab bar height based on platform and device
+ * ENHANCED: Use Material Design 3 specifications for Android
  */
 const getTabBarHeight = () => {
+  // For Android with Material Design 3, use the M3 specification
+  if (IS_ANDROID) {
+    const m3Capabilities = platformDetection.getMaterialDesignLevel();
+    if (m3Capabilities.supported && m3Capabilities.version >= 3) {
+      // Material Design 3 uses 80dp for bottom navigation including padding
+      // We'll use 56dp as the base height, plus any bottom spacing
+      return 56;
+    }
+  }
+  
   // Standard tab bar heights by platform
   const standardHeight = IS_IOS ? 49 : 56;
   
@@ -67,9 +79,19 @@ const getTabBarHeight = () => {
 
 /**
  * Get the header height based on platform and device
+ * ENHANCED: Use Material Design 3 specifications for Android
  */
 const getHeaderHeight = () => {
   const statusBarHeight = getStatusBarHeight();
+  
+  // For Android with Material Design 3, use the M3 specification
+  if (IS_ANDROID) {
+    const m3Capabilities = platformDetection.getMaterialDesignLevel();
+    if (m3Capabilities.supported && m3Capabilities.version >= 3) {
+      // Material Design 3 uses 64dp for standard top app bar
+      return statusBarHeight + 64;
+    }
+  }
   
   // Standard navbar/action bar height by platform
   const navigationBarHeight = IS_IOS ? 44 : 56;
@@ -80,8 +102,17 @@ const getHeaderHeight = () => {
 /**
  * Get a value based on platform
  * Shorthand for Platform.select that includes additional device information
+ * ENHANCED: Incorporates Material Design 3 detection
  */
 const select = (config) => {
+  // Check for Material Design 3 specific configuration
+  if (IS_ANDROID && config.material3) {
+    const m3Capabilities = platformDetection.getMaterialDesignLevel();
+    if (m3Capabilities.supported && m3Capabilities.version >= 3) {
+      return config.material3;
+    }
+  }
+  
   // Get the base value from Platform.select
   const baseValue = Platform.select({
     ios: config.ios,
@@ -109,26 +140,25 @@ const isTablet = () => {
 };
 
 /**
- * Create hook for getting safe area insets along with platform information
- */
-const usePlatformInsets = () => {
-  const insets = useSafeAreaInsets();
-  
-  return {
-    ...insets,
-    // Provide additional platform-specific values
-    bottomSpace: getBottomSpace(),
-    headerHeight: getHeaderHeight(),
-    tabBarHeight: getTabBarHeight(),
-  };
-};
-
-/**
  * Check if the platform supports shared element transitions
  */
 const supportsSharedElementTransitions = () => {
   // Currently only Android API level 21+ supports shared element transitions in React Navigation
   return IS_ANDROID && Platform.Version >= 21;
+};
+
+/**
+ * NEW: Check if platform supports Material You dynamic color system
+ * Dynamic color is a key feature of Material Design 3
+ */
+const supportsDynamicColors = () => {
+  if (!IS_ANDROID) {
+    return false;
+  }
+  
+  const m3Capabilities = platformDetection.getMaterialDesignLevel();
+  // Dynamic color requires Android 12+ (API level 31+) and Material Design 3 support
+  return m3Capabilities.supported && m3Capabilities.version >= 3 && m3Capabilities.dynamic;
 };
 
 // Export the platform detection utilities
@@ -143,6 +173,6 @@ export default {
   getTabBarHeight,
   getHeaderHeight,
   select,
-  usePlatformInsets,
   supportsSharedElementTransitions,
+  supportsDynamicColors, // NEW: Dynamic color system detection
 };

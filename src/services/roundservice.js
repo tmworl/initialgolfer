@@ -212,3 +212,33 @@ export const completeRound = async (round_id) => {
     throw error;
   }
 };
+
+/**
+ * Delete a round that was abandoned before completion
+ * 
+ * @param {string} round_id - The ID of the round to delete
+ * @returns {Promise<boolean>} Success status
+ */
+export const deleteAbandonedRound = async (round_id) => {
+  console.log("[deleteAbandonedRound] Removing abandoned round:", round_id);
+  
+  try {
+    // Delete the round record
+    const { error } = await supabase
+      .from("rounds")
+      .delete()
+      .eq("id", round_id)
+      .eq("is_complete", false); // Safety check - only delete incomplete rounds
+    
+    if (error) {
+      console.error("[deleteAbandonedRound] Error deleting round:", error);
+      return false;
+    }
+    
+    console.log("[deleteAbandonedRound] Successfully deleted abandoned round");
+    return true;
+  } catch (error) {
+    console.error("[deleteAbandonedRound] Exception deleting round:", error);
+    return false;
+  }
+};
