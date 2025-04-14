@@ -131,6 +131,12 @@ serve(async (req) => {
       // Determine if we need to refresh from API
       needsApiRefresh = forceRefresh || !hasPoiData || dataStale;
     }
+
+    // After effectiveApiCourseId is defined, add validation
+    if (!effectiveApiCourseId) {
+      console.error("Missing API course identifier, cannot fetch detail data");
+      throw new Error("Course API identifier is required for detail information");
+    }
     
     // If we need API data and have the API key + course ID
     if (needsApiRefresh && GOLF_API_KEY && effectiveApiCourseId) {
@@ -152,7 +158,24 @@ serve(async (req) => {
           // Parse API response
           const apiData = await apiResponse.json();
           
-          // Log structured data about the response for diagnostic purposes
+          // Add resilience layer
+          if (apiData) {
+            // Log key diagnostic information about API response
+            console.log("API response structure:", {
+              hasCourseName: !!apiData.courseName,
+              courseNameLength: (apiData.courseName || "").length,
+              clubName: apiData.clubName,
+              courseID: apiData.courseID
+            });
+            
+            // Normalize empty course name in API response
+            if (!apiData.courseName || apiData.courseName === "") {
+              console.log(`API returned empty course name for ID: ${effectiveApiCourseId}, using club name: ${apiData.clubName}`);
+              apiData.courseName = apiData.clubName;
+            }
+          }
+
+          // Log structured data about the response
           console.log("API response received for course coordinates", {
             responseKeys: Object.keys(apiData),
             hasCoordinates: !!apiData.coordinates,

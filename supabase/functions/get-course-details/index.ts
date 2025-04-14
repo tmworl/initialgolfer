@@ -1,51 +1,7 @@
-// supabase/functions/get-courses/index.ts
+// supabase/functions/get-course-details/index.ts
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.31.0';
-
-/**
- * =========================================================================
- * SERVER-SIDE SEARCH PREPROCESSING ENGINE
- * =========================================================================
- * This preprocessing pipeline transforms raw search queries to enhance recall
- * while reducing redundant API calls. Maintains a clear separation between
- * input standardization and database interaction layers.
- */
-function preprocessSearchQuery(originalQuery: string): string {
-  console.log(`[SERVER PREPROCESS] Original query: "${originalQuery}"`);
-  
-  // STEP 1: Remove leading articles (the, a, an)
-  let processed = originalQuery.replace(/^(the|a|an)\s+/i, '');
-  
-  // STEP 2: Filter out domain-specific noise terms 
-  // ===== MODIFY THIS ARRAY TO ADJUST FILTERING STRATEGY =====
-  const NOISE_TERMS = [
-    'golf',
-    'course',
-    'club',
-    'cc',
-    'country',
-    'links'
-  ];
-  
-  // Split into discrete tokens
-  let tokens = processed.split(/\s+/);
-  
-  // Filter out noise terms while preserving meaningful identifiers
-  tokens = tokens.filter(term => !NOISE_TERMS.includes(term.toLowerCase()));
-  
-  // Preserve query integrity - use original if filtering would leave nothing
-  if (tokens.length === 0) {
-    console.log(`[SERVER PREPROCESS] Filtering removed all terms, reverting to original`);
-    return originalQuery;
-  }
-  
-  // Reconstruct the processed query
-  processed = tokens.join(' ');
-  
-  console.log(`[SERVER PREPROCESS] Processed query: "${processed}"`);
-  return processed;
-}
 
 serve(async (req) => {
   // Handle OPTIONS for CORS preflight
@@ -76,338 +32,277 @@ serve(async (req) => {
     // Create Supabase client with service role key
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     
-    // Parse URL to get query parameters
+    // Parse URL to get course ID from path or query param
     const url = new URL(req.url);
-    const searchQuery = url.searchParams.get('query') || '';
-    const userId = url.searchParams.get('userId') || '';
-    const limit = parseInt(url.searchParams.get('limit') || '20', 10);
-    const noRecent = url.searchParams.get('noRecent') === 'true';
     
-    // Get authorization header for user context
-    const authHeader = req.headers.get('Authorization');
-    let userFromAuth = null;
+    // First try to get ID from path
+    const pathParts = url.pathname.split('/');
+    let courseId = pathParts[pathParts.length - 1];
     
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.replace('Bearer ', '');
-      try {
-        const { data: userData, error: authError } = await supabase.auth.getUser(token);
-        if (!authError && userData) {
-          userFromAuth = userData.user;
+    // If not in path, try query param
+    if (courseId === 'get-course-details') {
+      courseId = url.searchParams.get('courseId') || '';
+    }
+    
+    // For database ID or API course ID
+    const apiCourseId = url.searchParams.get('apiCourseId') || '';
+    
+    // Validate that either courseId or apiCourseId is provided
+    if (!courseId && !apiCourseId) {
+      return new Response(
+        JSON.stringify({ error: "Course ID or API Course ID is required" }),
+        { 
+          status: 400, 
+          headers: { 
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*"
+          } 
         }
-      } catch (e) {
-        console.error("Auth validation error:", e);
+      );
+    }
+    
+    // Force refresh parameter (optional)
+    const forceRefresh = url.searchParams.get('refresh') === 'true';
+    
+    // Get the current timestamp
+    const now = new Date();
+    
+    // Define data freshness threshold (90 days in milliseconds)
+    const FRESHNESS_THRESHOLD_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
+    
+    // Resolution path tracking
+    let resolutionPath = "unknown";
+    
+    // Enhanced multi-path entity resolution strategy
+    let courseData = null;
+    
+    // RESOLUTION PATH 1: Direct database ID lookup (primary path)
+    if (courseId) {
+      console.log(`Attempting direct ID resolution with: ${courseId}`);
+      const { data, error } = await supabase
+        .from('courses')
+        .select('*')
+        .eq('id', courseId)
+        .single();
+        
+      if (!error && data) {
+        courseData = data;
+        resolutionPath = "direct_id";
+        console.log(`Successfully resolved course via direct ID: ${data.name}`);
+      } else if (error && error.code !== 'PGRST116') {
+        // Log non-not-found errors
+        console.error("Database error in direct ID resolution:", error);
       }
     }
     
-    // Determine effective user ID
-    const effectiveUserId = userId || userFromAuth?.id;
-    
-    // Initialize results containers
-    let courses = [];
-    let recentCourses = [];
-    let apiSearchPerformed = false;
-    let apiSearchError = null;
-    
-    // CASE 1: Recent Courses (if userId provided and not explicitly skipped)
-    if (effectiveUserId && !noRecent) {
-      const { data: recentData, error: recentError } = await supabase
-        .from('rounds')
-        .select(`
-          course_id,
-          created_at,
-          courses:course_id (
-            id, 
-            name, 
-            club_name, 
-            location, 
-            tees,
-            poi
-          )
-        `)
-        .eq('profile_id', effectiveUserId)
-        .eq('is_complete', true)
-        .order('created_at', { ascending: false });
+    // RESOLUTION PATH 2: API Course ID lookup (secondary path)
+    if (!courseData && (apiCourseId || courseId)) {
+      console.log(`Attempting API ID resolution with: ${apiCourseId || courseId}`);
+      const effectiveApiId = apiCourseId || courseId;
+      const { data, error } = await supabase
+        .from('courses')
+        .select('*')
+        .eq('api_course_id', effectiveApiId)
+        .single();
         
-      if (!recentError && recentData) {
-        // Extract unique courses from recent rounds
-        const uniqueCourseIds = [];
-        const uniqueRecentCourses = [];
+      if (!error && data) {
+        courseData = data;
+        resolutionPath = "api_id";
+        console.log(`Successfully resolved course via API ID: ${data.name}`);
+      } else if (error && error.code !== 'PGRST116') {
+        console.error("Database error in API ID resolution:", error);
+      }
+    }
+    
+    // Enhanced resolution strategy: If we have a course ID but still no data,
+    // attempt to get it from the API directly and persist it
+    if (!courseData && GOLF_API_KEY && (apiCourseId || courseId)) {
+      try {
+        const effectiveApiId = apiCourseId || courseId;
+        console.log(`Attempting to fetch course directly from API: ${effectiveApiId}`);
         
-        recentData.forEach(round => {
-          if (round.courses && !uniqueCourseIds.includes(round.courses.id)) {
-            uniqueCourseIds.push(round.courses.id);
-            
-            // Add has_tee_data flag
-            uniqueRecentCourses.push({
-              ...round.courses,
-              has_tee_data: round.courses.tees !== null && 
-                          Array.isArray(round.courses.tees) && 
-                          round.courses.tees.length > 0,
-              has_poi_data: round.courses.poi !== null && 
-                          Array.isArray(round.courses.poi) && 
-                          round.courses.poi.length > 0
-            });
-          }
+        // Call API to get course details
+        const apiUrl = `https://www.golfapi.io/api/v2.3/courses/${effectiveApiId}`;
+        const apiResponse = await fetch(apiUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${GOLF_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          redirect: 'follow'
         });
         
-        recentCourses = uniqueRecentCourses.slice(0, limit);
-        console.log(`Found ${recentCourses.length} recent courses for user`);
-      }
-    }
-    
-    // CASE 2: Search Query (if provided)
-    if (searchQuery.length >= 3) {
-      // Apply preprocessing to the search query
-      const processedQuery = preprocessSearchQuery(searchQuery);
-      console.log(`Executing search with processed query: "${processedQuery}"`);
-      
-      // Search database first
-      let query = supabase
-        .from('courses')
-        .select('id, name, club_name, location, tees, poi, country, num_holes');
-      
-      // Apply search filter with case-insensitive pattern matching using processed query
-      query = query.or(`name.ilike.%${processedQuery}%,location.ilike.%${processedQuery}%,club_name.ilike.%${processedQuery}%`);
-      
-      const { data: dbCourses, error: dbError } = await query
-        .order('name')
-        .limit(limit);
-        
-      if (!dbError && dbCourses) {
-        courses = dbCourses.map(course => ({
-          ...course,
-          has_tee_data: course.tees !== null && 
-                      Array.isArray(course.tees) && 
-                      course.tees.length > 0,
-          has_poi_data: course.poi !== null && 
-                      Array.isArray(course.poi) && 
-                      course.poi.length > 0
-        }));
-        console.log(`Database query returned ${courses.length} courses`);
-      }
-      
-      // Fall back to API only when database has insufficient results (< 1)
-      // This represents a strategic architectural decision to minimize API usage
-      if (courses.length < 1 && GOLF_API_KEY) {
-        apiSearchPerformed = true;
-        console.log("Insufficient database results, calling external API");
-        
-        try {
-          // Apply preprocessing to API query as well
-          // Store original for analytics correlation
-          const originalApiQuery = searchQuery;
-          const processedApiQuery = processedQuery;
+        if (apiResponse.ok) {
+          const course = await apiResponse.json();
+          console.log(`API returned course: ${course.clubName}, Course ID: ${course.courseID}`);
           
-          // Construct API URL for Golf API using processed query
-          const apiUrl = `https://www.golfapi.io/api/v2.3/courses?name=${encodeURIComponent(processedApiQuery)}`;
+          // CRITICAL ENHANCEMENT: Handle empty course name by using club name
+          const effectiveName = course.courseName || course.clubName;
           
-          // Call Golf API with Bearer token authentication
-          const apiResponse = await fetch(apiUrl, {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${GOLF_API_KEY}`,
-              'Content-Type': 'application/json'
-            },
-            redirect: 'follow'
-          });
+          console.log(`Using effective name for course: ${effectiveName}`);
           
-          if (apiResponse.ok) {
-            const apiData = await apiResponse.json();
-            console.log(`API returned ${apiData.numCourses} courses`);
+          // Transform API response for our schema
+          const transformedCourse = {
+            name: effectiveName, // Use club name if course name is empty
+            api_course_id: course.courseID,
+            club_name: course.clubName,
+            location: `${course.city}, ${course.state}`,
+            country: course.country,
+            latitude: course.latitude,
+            longitude: course.longitude,
+            num_holes: course.numHoles,
+            par: course.parsMen?.reduce((sum, par) => sum + par, 0) || null,
+            updated_at: new Date(parseInt(course.timestampUpdated) * 1000).toISOString(),
             
-            if (apiData.courses && Array.isArray(apiData.courses)) {
-              // Transform API data to our DB schema
-              const transformedCourses = apiData.courses
-                .map(course => {
-                  // Log generic names but don't filter them out - allow them into the database
-                  if (course.courseName === "18-hole course" || 
-                      course.courseName === "9-hole course") {
-                    console.log(`Generic Name Course Detected: ${course.courseName} for ${course.clubName}, ID: ${course.courseID}`);
-                  }
-                  
-                  return {
-                    name: course.courseName,
-                    api_course_id: course.courseID,
-                    club_name: course.clubName,
-                    location: `${course.city}, ${course.state}`,
-                    country: course.country,
-                    latitude: null,  // Will be populated with detailed info
-                    longitude: null, // Will be populated with detailed info
-                    num_holes: course.numHoles,
-                    par: null,       // Will be populated with detailed info
-                    tees: [],        // Will be populated with detailed info
-                    holes: [],       // Will be populated with detailed info
-                    updated_at: new Date(parseInt(course.timestampUpdated) * 1000).toISOString()
-                  };
-                });
-                
-              // Strategic persistence approach: store API results for future queries
-              if (transformedCourses.length > 0) {
-                console.log(`Persisting ${transformedCourses.length} courses from API to database`);
-                
-                // Process each course individually for better error resilience
-                for (const course of transformedCourses) {
-                  // Check if course already exists
-                  const { data: existingCourse, error: existingError } = await supabase
-                    .from('courses')
-                    .select('id')
-                    .eq('api_course_id', course.api_course_id)
-                    .maybeSingle();
-                    
-                  if (existingError) {
-                    console.error(`Error checking for existing course: ${existingError.message}`);
-                    continue;
-                  }
-                  
-                  if (existingCourse) {
-                    // Update existing course
-                    const { error: updateError } = await supabase
-                      .from('courses')
-                      .update({
-                        name: course.name,
-                        club_name: course.club_name,
-                        location: course.location,
-                        country: course.country,
-                        num_holes: course.num_holes,
-                        updated_at: course.updated_at
-                      })
-                      .eq('id', existingCourse.id);
-                      
-                    if (updateError) {
-                      console.error(`Error updating course: ${updateError.message}`);
-                    } else {
-                      console.log(`Updated course: ${course.name}`);
-                    }
-                  } else {
-                    // Insert new course
-                    const { data: insertedCourse, error: insertError } = await supabase
-                      .from('courses')
-                      .insert({
-                        ...course,
-                        created_at: new Date().toISOString()
-                      })
-                      .select()
-                      .single();
-                      
-                    if (insertError) {
-                      console.error(`Error inserting course: ${insertError.message}`);
-                    } else {
-                      console.log(`Inserted new course: ${course.name}`);
-                    }
-                  }
-                }
-                
-                // Refresh results to include newly added courses
-                const refreshQuery = `name.ilike.%${processedQuery}%,location.ilike.%${processedQuery}%,club_name.ilike.%${processedQuery}%`;
-                console.log(`Refreshing results with query: ${refreshQuery}`);
-                
-                const { data: refreshedCourses, error: refreshError } = await supabase
-                  .from('courses')
-                  .select('id, name, club_name, location, tees, poi, country, num_holes')
-                  .or(refreshQuery)
-                  .order('name')
-                  .limit(limit);
-                  
-                if (!refreshError && refreshedCourses) {
-                  courses = refreshedCourses.map(course => ({
-                    ...course,
-                    has_tee_data: course.tees !== null && 
-                              Array.isArray(course.tees) && 
-                              course.tees.length > 0,
-                    has_poi_data: course.poi !== null && 
-                              Array.isArray(course.poi) && 
-                              course.poi.length > 0
-                  }));
-                  console.log(`After API integration: ${courses.length} courses available`);
-                }
-              }
+            // Extract tee data
+            tees: course.tees ? course.tees.map(tee => ({
+              id: tee.teeID,
+              name: tee.teeName,
+              color: tee.teeColor,
+              slope_men: tee.slopeMen || null,
+              slope_women: tee.slopeWomen || null,
+              total_distance: Array.from({ length: 18 }, (_, i) => Number(tee[`length${i+1}`] || 0)).reduce((a, b) => a + b, 0),
+              course_rating_men: tee.courseRatingMen || null,
+              course_rating_women: tee.courseRatingWomen || null
+            })) : [],
+            
+            // Extract holes data 
+            holes: Array.from({ length: course.numHoles }, (_, i) => {
+              const holeNum = i + 1;
+              return {
+                number: holeNum,
+                par_men: course.parsMen?.[i] || null,
+                par_women: course.parsWomen?.[i] || null,
+                index_men: course.indexesMen?.[i] || null,
+                index_women: course.indexesWomen?.[i] || null,
+                distances: course.tees ? Object.fromEntries(
+                  course.tees.map(tee => [
+                    tee.teeName.toLowerCase(), 
+                    Number(tee[`length${holeNum}`] || 0)
+                  ])
+                ) : {}
+              };
+            })
+          };
+          
+          // First check if course already exists in our database
+          const { data: existingCourse, error: existingError } = await supabase
+            .from('courses')
+            .select('id')
+            .eq('api_course_id', transformedCourse.api_course_id)
+            .maybeSingle();
+            
+          if (existingError && existingError.code !== 'PGRST116') {
+            console.error("Database error checking for existing course:", existingError);
+          }
+          
+          let savedCourse = null;
+          
+          if (existingCourse) {
+            // Update existing course
+            console.log(`Updating existing course in database: ${transformedCourse.name}`);
+            const { data: updatedCourse, error: updateError } = await supabase
+              .from('courses')
+              .update(transformedCourse)
+              .eq('id', existingCourse.id)
+              .select()
+              .single();
+              
+            if (updateError) {
+              console.error("Error updating course from API data:", updateError);
             } else {
-              console.error("API returned unexpected data structure:", apiData);
-              apiSearchError = "Unexpected API response format";
+              savedCourse = updatedCourse;
+              console.log(`Course updated successfully: ${savedCourse.name}`);
             }
           } else {
-            // Handle API error
-            const errorStatus = apiResponse.status;
-            let errorMessage = `API returned status ${errorStatus}`;
-            
-            try {
-              const errorBody = await apiResponse.text();
-              console.error(`API error (${errorStatus}): ${errorBody}`);
+            // Insert new course
+            console.log(`Inserting new course in database: ${transformedCourse.name}`);
+            const { data: insertedCourse, error: insertError } = await supabase
+              .from('courses')
+              .insert({
+                ...transformedCourse,
+                created_at: new Date().toISOString()
+              })
+              .select()
+              .single();
               
-              // Check for auth errors specifically
-              if (errorStatus === 401 || errorStatus === 403) {
-                apiSearchError = "API authentication failed";
-                console.error("Golf API authentication error - please check API key");
-              } else {
-                apiSearchError = `API error: ${errorStatus}`;
-              }
-              
-              // Log the full error for debugging
-              console.error(`Full API error response: ${errorBody}`);
-              
-            } catch (parseError) {
-              console.error(`Could not parse error response: ${parseError}`);
-              apiSearchError = `API error: ${errorStatus}`;
+            if (insertError) {
+              console.error("Error inserting course from API data:", insertError);
+            } else {
+              savedCourse = insertedCourse;
+              console.log(`Course inserted successfully: ${savedCourse.name}`);
             }
           }
-        } catch (apiError) {
-          console.error(`Exception calling Golf API: ${apiError}`);
-          apiSearchError = "API connection error";
+          
+          if (savedCourse) {
+            courseData = savedCourse;
+            resolutionPath = "api_fetch_persist";
+          }
+        } else {
+          // Handle API error
+          const errorStatus = apiResponse.status;
+          console.error(`API error (${errorStatus}) fetching course`);
+          
+          try {
+            const errorText = await apiResponse.text();
+            console.error("API error details:", errorText);
+          } catch (e) {
+            console.error("Could not parse API error response");
+          }
         }
-      }
-    } else if (searchQuery.length > 0 && searchQuery.length < 3) {
-      console.log(`Search query too short (${searchQuery.length} chars): "${searchQuery}"`);
-    } else if (searchQuery.length === 0) {
-      // If no search query, get popular courses
-      const { data: popularCourses, error: popularError } = await supabase
-        .from('courses')
-        .select('id, name, club_name, location, tees, poi, country, num_holes')
-        .order('name')
-        .limit(limit);
-        
-      if (!popularError && popularCourses) {
-        courses = popularCourses.map(course => ({
-          ...course,
-          has_tee_data: course.tees !== null && 
-                      Array.isArray(course.tees) && 
-                      course.tees.length > 0,
-          has_poi_data: course.poi !== null && 
-                      Array.isArray(course.poi) && 
-                      course.poi.length > 0
-        }));
-        console.log(`Found ${courses.length} popular courses`);
+      } catch (apiError) {
+        console.error("Error fetching from API:", apiError);
       }
     }
     
-    // Prepare response
-    const response = {
-      courses,
-      apiSearchPerformed,
-      apiSearchError,
-      totalResults: courses.length,
-      searchQuery: searchQuery || null
-    };
-    
-    // Add recent courses if available
-    if (recentCourses.length > 0) {
-      response.recentCourses = recentCourses;
+    // If we still can't find the course, return an error
+    if (!courseData) {
+      return new Response(
+        JSON.stringify({ 
+          error: "Course not found",
+          courseId,
+          apiCourseId
+        }),
+        { 
+          status: 404, 
+          headers: { 
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*"
+          } 
+        }
+      );
     }
     
-    // Return results
+    // Check if course data is stale and needs a refresh
+    let dataStale = false;
+    if (courseData.updated_at) {
+      const lastUpdateTime = new Date(courseData.updated_at).getTime();
+      const staleDuration = now.getTime() - lastUpdateTime;
+      dataStale = staleDuration > FRESHNESS_THRESHOLD_MS;
+    }
+    
+    // Prepare response with resolution metadata
     return new Response(
-      JSON.stringify(response),
+      JSON.stringify({
+        ...courseData,
+        has_tee_data: courseData.tees && Array.isArray(courseData.tees) && courseData.tees.length > 0,
+        has_poi_data: courseData.poi && Array.isArray(courseData.poi) && courseData.poi.length > 0,
+        resolution_path: resolutionPath,
+        data_freshness: {
+          stale: dataStale,
+          last_updated: courseData.updated_at
+        }
+      }),
       { 
         headers: { 
           "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type, Authorization, x-client-info, apikey"
+          "Access-Control-Allow-Origin": "*"
         } 
       }
     );
     
   } catch (error) {
-    console.error(`Error in get-courses function: ${error}`);
+    console.error(`Error in get-course-details function: ${error}`);
     
     return new Response(
       JSON.stringify({ 
@@ -418,9 +313,7 @@ serve(async (req) => {
         status: 500, 
         headers: { 
           "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type, Authorization, x-client-info, apikey"
+          "Access-Control-Allow-Origin": "*"
         } 
       }
     );

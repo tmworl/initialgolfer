@@ -3,6 +3,50 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.31.0';
 
+/**
+ * =========================================================================
+ * SERVER-SIDE SEARCH PREPROCESSING ENGINE
+ * =========================================================================
+ * This preprocessing pipeline transforms raw search queries to enhance recall
+ * while reducing redundant API calls. Maintains a clear separation between
+ * input standardization and database interaction layers.
+ */
+function preprocessSearchQuery(originalQuery: string): string {
+  console.log(`[SERVER PREPROCESS] Original query: "${originalQuery}"`);
+  
+  // STEP 1: Remove leading articles (the, a, an)
+  let processed = originalQuery.replace(/^(the|a|an)\s+/i, '');
+  
+  // STEP 2: Filter out domain-specific noise terms 
+  // ===== MODIFY THIS ARRAY TO ADJUST FILTERING STRATEGY =====
+  const NOISE_TERMS = [
+    'golf',
+    'course',
+    'club',
+    'cc',
+    'country',
+    'links'
+  ];
+  
+  // Split into discrete tokens
+  let tokens = processed.split(/\s+/);
+  
+  // Filter out noise terms while preserving meaningful identifiers
+  tokens = tokens.filter(term => !NOISE_TERMS.includes(term.toLowerCase()));
+  
+  // Preserve query integrity - use original if filtering would leave nothing
+  if (tokens.length === 0) {
+    console.log(`[SERVER PREPROCESS] Filtering removed all terms, reverting to original`);
+    return originalQuery;
+  }
+  
+  // Reconstruct the processed query
+  processed = tokens.join(' ');
+  
+  console.log(`[SERVER PREPROCESS] Processed query: "${processed}"`);
+  return processed;
+}
+
 serve(async (req) => {
   // Handle OPTIONS for CORS preflight
   if (req.method === "OPTIONS") {
@@ -76,7 +120,8 @@ serve(async (req) => {
             name, 
             club_name, 
             location, 
-            tees
+            tees,
+            poi
           )
         `)
         .eq('profile_id', effectiveUserId)
@@ -97,7 +142,10 @@ serve(async (req) => {
               ...round.courses,
               has_tee_data: round.courses.tees !== null && 
                           Array.isArray(round.courses.tees) && 
-                          round.courses.tees.length > 0
+                          round.courses.tees.length > 0,
+              has_poi_data: round.courses.poi !== null && 
+                          Array.isArray(round.courses.poi) && 
+                          round.courses.poi.length > 0
             });
           }
         });
@@ -109,15 +157,17 @@ serve(async (req) => {
     
     // CASE 2: Search Query (if provided)
     if (searchQuery.length >= 3) {
-      console.log(`Searching for: "${searchQuery}"`);
+      // Apply preprocessing to the search query
+      const processedQuery = preprocessSearchQuery(searchQuery);
+      console.log(`Executing search with processed query: "${processedQuery}"`);
       
       // Search database first
       let query = supabase
         .from('courses')
         .select('id, name, club_name, location, tees, poi, country, num_holes');
       
-      // Apply search filter with case-insensitive pattern matching
-      query = query.or(`name.ilike.%${searchQuery}%,location.ilike.%${searchQuery}%,club_name.ilike.%${searchQuery}%`);
+      // Apply search filter with case-insensitive pattern matching using processed query
+      query = query.or(`name.ilike.%${processedQuery}%,location.ilike.%${processedQuery}%,club_name.ilike.%${processedQuery}%`);
       
       const { data: dbCourses, error: dbError } = await query
         .order('name')
@@ -133,17 +183,23 @@ serve(async (req) => {
                       Array.isArray(course.poi) && 
                       course.poi.length > 0
         }));
-        console.log(`Found ${courses.length} courses in database`);
+        console.log(`Database query returned ${courses.length} courses`);
       }
       
-      // Fall back to API if database has insufficient results and API key is available
-      if (courses.length < 3 && GOLF_API_KEY) {
+      // Fall back to API only when database has insufficient results (< 1)
+      // This represents a strategic architectural decision to minimize API usage
+      if (courses.length < 1 && GOLF_API_KEY) {
         apiSearchPerformed = true;
-        console.log("Not enough results in DB, calling external API");
+        console.log("Insufficient database results, calling external API");
         
         try {
-          // Construct API URL for Golf API
-          const apiUrl = `https://www.golfapi.io/api/v2.3/courses?name=${encodeURIComponent(searchQuery)}`;
+          // Apply preprocessing to API query as well
+          // Store original for analytics correlation
+          const originalApiQuery = searchQuery;
+          const processedApiQuery = processedQuery;
+          
+          // Construct API URL for Golf API using processed query
+          const apiUrl = `https://www.golfapi.io/api/v2.3/courses?name=${encodeURIComponent(processedApiQuery)}`;
           
           // Call Golf API with Bearer token authentication
           const apiResponse = await fetch(apiUrl, {
@@ -159,9 +215,6 @@ serve(async (req) => {
             const apiData = await apiResponse.json();
             console.log(`API returned ${apiData.numCourses} courses`);
             
-            // Log full API response for debugging
-            console.log("API Response:", JSON.stringify(apiData));
-            
             if (apiData.courses && Array.isArray(apiData.courses)) {
               // Transform API data to our DB schema
               const transformedCourses = apiData.courses
@@ -172,8 +225,15 @@ serve(async (req) => {
                     console.log(`Generic Name Course Detected: ${course.courseName} for ${course.clubName}, ID: ${course.courseID}`);
                   }
                   
+                  // Log empty course names
+                  if (!course.courseName) {
+                    console.log(`Empty Course Name Detected for ${course.clubName}, ID: ${course.courseID}`);
+                  }
+                  
+                  // ARCHITECTURAL ENHANCEMENT: Use club name when course name is empty
+                  // This establishes identity continuity for single-course clubs
                   return {
-                    name: course.courseName,
+                    name: course.courseName || course.clubName, // CRITICAL CHANGE: Use club name for empty course names
                     api_course_id: course.courseID,
                     club_name: course.clubName,
                     location: `${course.city}, ${course.state}`,
@@ -188,8 +248,11 @@ serve(async (req) => {
                   };
                 });
                 
-              // Store the transformed courses in the database
+              // Strategic persistence approach: store API results for future queries
               if (transformedCourses.length > 0) {
+                console.log(`Persisting ${transformedCourses.length} courses from API to database`);
+                
+                // Process each course individually for better error resilience
                 for (const course of transformedCourses) {
                   // Check if course already exists
                   const { data: existingCourse, error: existingError } = await supabase
@@ -208,7 +271,7 @@ serve(async (req) => {
                     const { error: updateError } = await supabase
                       .from('courses')
                       .update({
-                        name: course.name,
+                        name: course.name, // This now properly handles empty course names
                         club_name: course.club_name,
                         location: course.location,
                         country: course.country,
@@ -228,10 +291,6 @@ serve(async (req) => {
                       .from('courses')
                       .insert({
                         ...course,
-                        // Add uniqueness to generic course names
-                        name: course.courseName === "18-hole course" || course.courseName === "9-hole course" 
-                          ? `${course.clubName} - ${course.courseName}`
-                          : course.courseName,
                         created_at: new Date().toISOString()
                       })
                       .select()
@@ -245,11 +304,14 @@ serve(async (req) => {
                   }
                 }
                 
-                // Refresh the course list from database to include newly added courses
+                // Refresh results to include newly added courses
+                const refreshQuery = `name.ilike.%${processedQuery}%,location.ilike.%${processedQuery}%,club_name.ilike.%${processedQuery}%`;
+                console.log(`Refreshing results with query: ${refreshQuery}`);
+                
                 const { data: refreshedCourses, error: refreshError } = await supabase
                   .from('courses')
                   .select('id, name, club_name, location, tees, poi, country, num_holes')
-                  .or(`name.ilike.%${searchQuery}%,location.ilike.%${searchQuery}%,club_name.ilike.%${searchQuery}%`)
+                  .or(refreshQuery)
                   .order('name')
                   .limit(limit);
                   
@@ -263,7 +325,7 @@ serve(async (req) => {
                               Array.isArray(course.poi) && 
                               course.poi.length > 0
                   }));
-                  console.log(`After API search: ${courses.length} courses available`);
+                  console.log(`After API integration: ${courses.length} courses available`);
                 }
               }
             } else {
@@ -301,7 +363,7 @@ serve(async (req) => {
         }
       }
     } else if (searchQuery.length > 0 && searchQuery.length < 3) {
-      console.log(`Search query too short: ${searchQuery}`);
+      console.log(`Search query too short (${searchQuery.length} chars): "${searchQuery}"`);
     } else if (searchQuery.length === 0) {
       // If no search query, get popular courses
       const { data: popularCourses, error: popularError } = await supabase
