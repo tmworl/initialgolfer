@@ -72,6 +72,7 @@ serve(async (req) => {
     
     // Resolution path tracking
     let resolutionPath = "unknown";
+    let dataCompletionPath = "no_completion_needed";
     
     // Enhanced multi-path entity resolution strategy
     let courseData = null;
@@ -111,6 +112,145 @@ serve(async (req) => {
         console.log(`Successfully resolved course via API ID: ${data.name}`);
       } else if (error && error.code !== 'PGRST116') {
         console.error("Database error in API ID resolution:", error);
+      }
+    }
+    
+    // DATA COMPLETION VALIDATION GATE
+    // Validate if resolved course has complete tee data, if not fetch from API
+    if (courseData && 
+        (!courseData.tees || !Array.isArray(courseData.tees) || courseData.tees.length === 0) && 
+        courseData.api_course_id && 
+        GOLF_API_KEY) {
+      
+      console.log(`Entity resolved but tee data is incomplete for: ${courseData.name} (ID: ${courseData.id})`);
+      dataCompletionPath = "tee_data_completion";
+      
+      try {
+        console.log(`Fetching tee data from API for course: ${courseData.api_course_id}`);
+        
+        // Make API call to get complete course details including tees
+        const apiUrl = `https://www.golfapi.io/api/v2.3/courses/${courseData.api_course_id}`;
+        const apiResponse = await fetch(apiUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${GOLF_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          redirect: 'follow'
+        });
+        
+        if (apiResponse.ok) {
+          const apiCourseData = await apiResponse.json();
+          console.log(`API returned detailed data for course: ${apiCourseData.clubName}`);
+          
+          // Verify API returned tee data
+          if (apiCourseData.tees && Array.isArray(apiCourseData.tees) && apiCourseData.tees.length > 0) {
+            console.log(`Found ${apiCourseData.tees.length} tees in API response`);
+            
+            // Transform tee data to match our database schema
+            const transformedTees = apiCourseData.tees.map(tee => ({
+              id: tee.teeID,
+              name: tee.teeName,
+              color: tee.teeColor,
+              slope_men: tee.slopeMen || null,
+              slope_women: tee.slopeWomen || null,
+              total_distance: Array.from({ length: 18 }, (_, i) => Number(tee[`length${i+1}`] || 0)).reduce((a, b) => a + b, 0),
+              course_rating_men: tee.courseRatingMen || null,
+              course_rating_women: tee.courseRatingWomen || null
+            }));
+            
+            // Calculate total par if available
+            let totalPar = null;
+            if (apiCourseData.parsMen && Array.isArray(apiCourseData.parsMen)) {
+              totalPar = apiCourseData.parsMen.reduce((sum, par) => sum + par, 0);
+            }
+            
+            // Extract holes data if not already present
+            let holesData = [];
+            if (apiCourseData.parsMen && (!courseData.holes || !Array.isArray(courseData.holes) || courseData.holes.length === 0)) {
+              holesData = Array.from({ length: apiCourseData.numHoles || 18 }, (_, i) => {
+                const holeNum = i + 1;
+                return {
+                  number: holeNum,
+                  par_men: apiCourseData.parsMen?.[i] || null,
+                  par_women: apiCourseData.parsWomen?.[i] || null,
+                  index_men: apiCourseData.indexesMen?.[i] || null,
+                  index_women: apiCourseData.indexesWomen?.[i] || null,
+                  distances: apiCourseData.tees ? Object.fromEntries(
+                    apiCourseData.tees.map(tee => [
+                      tee.teeName.toLowerCase(), 
+                      Number(tee[`length${holeNum}`] || 0)
+                    ])
+                  ) : {}
+                };
+              });
+            }
+            
+            // Update course data properties to enrich with tee data
+            const updateData: Record<string, any> = {
+              tees: transformedTees,
+              updated_at: now.toISOString()
+            };
+            
+            // Only set par if we have it and the course doesn't already
+            if (totalPar !== null && !courseData.par) {
+              updateData.par = totalPar;
+            }
+            
+            // Only set holes if we generated them and they didn't already exist
+            if (holesData.length > 0 && (!courseData.holes || !courseData.holes.length)) {
+              updateData.holes = holesData;
+            }
+            
+            // Latitude/longitude if missing
+            if (apiCourseData.latitude && apiCourseData.longitude && (!courseData.latitude || !courseData.longitude)) {
+              updateData.latitude = apiCourseData.latitude;
+              updateData.longitude = apiCourseData.longitude;
+            }
+            
+            // Update the database record with the enriched data
+            console.log(`Updating course with tee data:`, updateData);
+            const { error: updateError } = await supabase
+              .from('courses')
+              .update(updateData)
+              .eq('id', courseData.id);
+              
+            if (updateError) {
+              console.error("Error updating course with tee data:", updateError);
+            } else {
+              console.log(`Successfully updated course ${courseData.name} with tee data`);
+              
+              // Refresh course data with updated information
+              const { data: refreshedCourse, error: refreshError } = await supabase
+                .from('courses')
+                .select('*')
+                .eq('id', courseData.id)
+                .single();
+                
+              if (!refreshError && refreshedCourse) {
+                courseData = refreshedCourse;
+                console.log(`Course data refreshed with tee information`);
+              } else {
+                console.error("Error refreshing course data:", refreshError);
+              }
+            }
+          } else {
+            console.warn("API response did not contain valid tee data");
+          }
+        } else {
+          // Handle API error
+          const errorStatus = apiResponse.status;
+          let errorMessage = `API returned status ${errorStatus}`;
+          
+          try {
+            const errorText = await apiResponse.text();
+            console.error(`API error (${errorStatus}) fetching course data: ${errorText}`);
+          } catch (parseError) {
+            console.error(`Could not parse API error response: ${parseError}`);
+          }
+        }
+      } catch (apiError) {
+        console.error("Exception in API tee data completion:", apiError);
       }
     }
     
@@ -288,6 +428,7 @@ serve(async (req) => {
         has_tee_data: courseData.tees && Array.isArray(courseData.tees) && courseData.tees.length > 0,
         has_poi_data: courseData.poi && Array.isArray(courseData.poi) && courseData.poi.length > 0,
         resolution_path: resolutionPath,
+        data_completion_path: dataCompletionPath,
         data_freshness: {
           stale: dataStale,
           last_updated: courseData.updated_at
