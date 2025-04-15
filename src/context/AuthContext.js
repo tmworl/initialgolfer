@@ -3,7 +3,11 @@
 import React, { createContext, useState, useEffect, useCallback } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Linking } from "react-native";
+import { createNavigationContainerRef } from "@react-navigation/native";
 import { supabase } from "../services/supabase";
+
+// Create navigation reference for cross-component navigation capabilities
+export const navigationRef = createNavigationContainerRef();
 
 // Create an authentication context
 export const AuthContext = createContext();
@@ -34,6 +38,31 @@ export const AuthProvider = ({ children }) => {
   
   // Session restoration state
   const [sessionRestored, setSessionRestored] = useState(false);
+
+  /**
+   * Navigation handler for successful verification
+   * Memoized to prevent unnecessary re-renders
+   */
+  const handleSuccessfulVerification = useCallback(() => {
+    console.log("Email verified successfully, initiating navigation transition");
+    
+    // Validate navigation ref to prevent runtime errors
+    if (navigationRef.isReady()) {
+      try {
+        // Reset navigation stack to ensure clean navigation state
+        navigationRef.resetRoot({
+          index: 0,
+          routes: [{ name: 'Main' }],
+        });
+        console.log("Navigation successfully transitioned to Main route");
+      } catch (navError) {
+        console.error("Navigation transition failed:", navError);
+        // Graceful degradation - verification state will still be picked up by AppNavigator
+      }
+    } else {
+      console.log("Navigation reference not ready, verification state will be handled by AppNavigator");
+    }
+  }, []);
 
   /**
    * Load user permissions from the database
@@ -107,10 +136,13 @@ export const AuthProvider = ({ children }) => {
           await loadUserPermissions(data.session.user.id);
           
           if (isVerified && pendingVerificationEmail) {
-            console.log("Email verified successfully!");
+            console.log("Email verification confirmed - transitioning authentication state");
             // Clear pending verification state
             setPendingVerificationEmail(null);
             await AsyncStorage.removeItem('@GolfApp:pendingVerificationEmail');
+            
+            // Trigger navigation to main app
+            handleSuccessfulVerification();
           }
         }
       } catch (err) {
@@ -219,7 +251,7 @@ export const AuthProvider = ({ children }) => {
       }
       linkingListener.remove();
     };
-  }, [pendingVerificationEmail]);
+  }, [pendingVerificationEmail, handleSuccessfulVerification]);
 
   /**
    * Enhanced sign-in implementation
@@ -374,7 +406,8 @@ export const AuthProvider = ({ children }) => {
       resendVerificationEmail,
       userPermissions,
       hasPermission,
-      sessionRestored // New flag to indicate session restoration completion
+      sessionRestored, // Session restoration flag
+      navigateAfterVerification: handleSuccessfulVerification // Navigation capability
     }}>
       {children}
     </AuthContext.Provider>

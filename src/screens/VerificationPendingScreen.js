@@ -1,8 +1,9 @@
 // src/screens/VerificationPendingScreen.js
 
-import React, { useContext, useState } from "react";
+import React, { useContext, useState, useEffect } from "react";
 import { View, StyleSheet, Alert, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from '@react-navigation/native';
 import { AuthContext } from "../context/AuthContext";
 import Typography from "../ui/components/Typography";
 import Button from "../ui/components/Button";
@@ -13,21 +14,51 @@ import theme from "../ui/theme";
  * VerificationPendingScreen Component
  * 
  * Displayed when a user has signed up but hasn't verified their email yet.
- * Provides clear instructions and the ability to resend the verification email.
+ * Enhanced with verification state monitoring to ensure seamless transition
+ * to the main application once verification is confirmed.
  */
 export default function VerificationPendingScreen() {
+  const navigation = useNavigation();
   const { 
     pendingVerificationEmail, 
     resendVerificationEmail, 
     loading, 
     error, 
     setError,
-    signOut 
+    signOut,
+    user,
+    emailVerified,
+    navigateAfterVerification
   } = useContext(AuthContext);
   
   // Local state for resend cooldown
   const [resendCooldown, setResendCooldown] = useState(false);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  
+  /**
+   * Verification state monitor
+   * 
+   * This effect ensures the user is automatically navigated to the main
+   * application when verification state changes, providing a secondary
+   * path for verification completion for race condition resilience.
+   */
+  useEffect(() => {
+    if (user && emailVerified) {
+      console.log("VerificationPendingScreen: Detected verification state change, triggering navigation");
+      
+      // For defensive programming, provide a fallback navigation mechanism
+      // beyond the deep link handler's navigation capability
+      if (navigateAfterVerification) {
+        navigateAfterVerification();
+      } else {
+        // Direct navigation as fallback if context method unavailable
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Main' }],
+        });
+      }
+    }
+  }, [user, emailVerified, navigation, navigateAfterVerification]);
   
   /**
    * Handle resend verification email request
