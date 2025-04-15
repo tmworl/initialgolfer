@@ -51,10 +51,10 @@ const createStackNavigatorScreenOptions = () => {
       )
     ),
     
-    // Dynamic Island and notch avoidance
-    headerStatusBarHeight: platformDetection.getStatusBarHeight() +
-      // Add extra padding for Dynamic Island
-      (platformDetection.hasDynamicIsland() ? 4 : 0),
+    // CRITICAL FIX: Remove custom status bar height calculation and let React Navigation
+    // handle safe areas natively. This eliminates the header overlap issue on iOS.
+    // headerStatusBarHeight: platformDetection.getStatusBarHeight() +
+    //   (platformDetection.hasDynamicIsland() ? 4 : 0),
     
     // Typography refinements
     headerTitleStyle: {

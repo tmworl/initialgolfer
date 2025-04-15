@@ -158,7 +158,7 @@ serve(async (req) => {
           // Parse API response
           const apiData = await apiResponse.json();
           
-          // Add resilience layer
+          // Add resilience layer for API response validation
           if (apiData) {
             // Log key diagnostic information about API response
             console.log("API response structure:", {
@@ -182,8 +182,7 @@ serve(async (req) => {
             coordinatesCount: (apiData.coordinates || []).length
           });
           
-          // Modified logic to handle API response structure
-          // Check for coordinates data at root level (the actual API structure)
+          // Process coordinates data at root level
           if (apiData && Array.isArray(apiData.coordinates)) {
             console.log(`Received ${apiData.coordinates.length} coordinate points from API`);
             
@@ -224,7 +223,7 @@ serve(async (req) => {
                 lng: parseFloat(coord.longitude)
               };
               
-              // Map the POI values to feature types using the corrected mapping
+              // Map the POI values to feature types
               switch(coord.poi) {
                 case 1: // Green
                   // Determine location (front, middle, back)
@@ -434,7 +433,6 @@ serve(async (req) => {
     }
     
     // Prepare response data
-    // Filter out empty POI arrays for cleaner response
     let responseData = {
       ...existingCourse,
       has_poi_data: false,
