@@ -90,6 +90,28 @@ serve(async (req) => {
     
     console.log("Using user ID:", userId);
     
+    // Add profile data fetch here
+    let userHandicap = null;
+    let userProfile = null;
+
+    try {
+      const { data: profileData, error: profileError } = await supabase
+        .from("profiles")
+        .select("handicap, first_name")
+        .eq("id", userId)
+        .single();
+      
+      if (profileError) {
+        console.error("Error fetching user profile:", profileError);
+      } else if (profileData) {
+        userProfile = profileData;
+        userHandicap = profileData.handicap;
+        console.log("User handicap:", userHandicap);
+      }
+    } catch (profileError) {
+      console.error("Exception fetching user profile:", profileError);
+    }
+    
     // *** PRODUCT PERMISSION CHECK ***
     // Check if user has product_a permission (Insights product)
     let hasProductA = false;
@@ -280,6 +302,26 @@ serve(async (req) => {
     let maxTokens;
     
     if (hasProductA) {
+      golfData = {
+        rounds: processedRounds,
+        totalRounds: processedRounds.length,
+        userProfile: {
+          handicap: userHandicap
+        }
+      };
+    } else {
+      const limitedRounds = processedRounds.slice(0, 1);
+      golfData = {
+        rounds: limitedRounds,
+        totalRounds: limitedRounds.length,
+        limitedData: true,
+        userProfile: {
+          handicap: userHandicap
+        }
+      };
+    }
+    
+    if (hasProductA) {
       // PRODUCT A USERS: Full data and comprehensive analysis
       console.log("Using product_a data and prompt strategy");
       
@@ -294,7 +336,7 @@ serve(async (req) => {
       // Existing premium prompt - unchanged from original
       promptContent = `You are a PGA Tour-certified golf coach with expertise in statistical analysis and golf course management. Your coaching philosophy centers on personalized improvement through data-driven insights, focusing on the 20% of changes that create 80% of improvement for each unique player. Create personalized, specific, and actionable insights focused on helping them improve. Think beyond basic analysis - create longitudinal, spatial, and sequence-based insights that demonstrate extraordinary value to help players score better, realistically score better.
 
-I'm providing granular shot-by-shot data from ${golfData.totalRounds} recent rounds. Each round contains shots per hole, with timestamps, categorization by type of shot, and quality assessment (On Target/Slightly Off/Recovery Needed), with timestamps so you can see the timeline of each hole and each hole as one entity that is made up of single parts that make the total number for the whole. The data represents play across different courses. If you know any specifics about these courses or holes, use that knowledge in the assessment to improve contextual information on the rounds.
+I'm providing granular shot-by-shot data from ${golfData.totalRounds} recent rounds from a ${userHandicap ? `${userHandicap} handicap` : 'golfer'}. Each round contains shots per hole, with timestamps, categorization by type of shot, and quality assessment (On Target/Slightly Off/Recovery Needed), with timestamps so you can see the timeline of each hole and each hole as one entity that is made up of single parts that make the total number for the whole. The data represents play across different courses. If you know any specifics about these courses or holes, use that knowledge in the assessment to improve contextual information on the rounds.
 
 As you analyze this data, focus on these high-value dimensions:
 
