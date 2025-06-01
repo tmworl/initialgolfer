@@ -1,0 +1,469 @@
+<!DOCTYPE HTML>
+<html>
+	<head>
+		<title>Golf Improve - Lower Your Golf Score with Smart Analytics</title>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+		<meta name="description" content="Effortless golf tracking with AI-powered insights. Users improve their strokes, you can too. All in your pocket.">
+		<style>
+			/* Reset and Base Styles */
+			* {
+				margin: 0;
+				padding: 0;
+				box-sizing: border-box;
+			}
+
+			body {
+				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+				line-height: 1.6;
+				color: #333333;
+				background: #FFFFFF;
+			}
+
+			/* Layout Container */
+			.container {
+				max-width: 1200px;
+				margin: 0 auto;
+				padding: 0 16px;
+			}
+
+			.container.medium {
+				max-width: 800px;
+			}
+
+			/* Hero Section */
+			.hero {
+				background: linear-gradient(135deg, #007AFF 0%, #005CE6 100%);
+				color: white;
+				padding: 80px 0 60px;
+				text-align: center;
+				position: relative;
+				overflow: hidden;
+			}
+
+			.hero::before {
+				content: '';
+				position: absolute;
+				top: 0;
+				left: 0;
+				right: 0;
+				bottom: 0;
+				background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="1" fill="white" opacity="0.1"/></svg>') repeat;
+				background-size: 50px 50px;
+			}
+
+			.hero-content {
+				position: relative;
+				z-index: 2;
+			}
+
+			.hero h1 {
+				font-size: clamp(28px, 6vw, 48px);
+				font-weight: 700;
+				line-height: 1.2;
+				margin-bottom: 20px;
+				letter-spacing: -0.02em;
+			}
+
+			.hero p {
+				font-size: clamp(18px, 4vw, 22px);
+				font-weight: 400;
+				margin-bottom: 32px;
+				opacity: 0.9;
+				max-width: 600px;
+				margin-left: auto;
+				margin-right: auto;
+			}
+
+			.hero-cta {
+				display: inline-flex;
+				align-items: center;
+				gap: 12px;
+				background: white;
+				color: #007AFF;
+				padding: 16px 32px;
+				border-radius: 50px;
+				text-decoration: none;
+				font-weight: 600;
+				font-size: 18px;
+				box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+				transition: all 0.3s ease;
+			}
+
+			.hero-cta:hover {
+				transform: translateY(-2px);
+				box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+			}
+
+			/* Features Section */
+			.features {
+				padding: 80px 0;
+				background: #FAFBFC;
+			}
+
+			.features-header {
+				text-align: center;
+				margin-bottom: 60px;
+			}
+
+			.features-header h2 {
+				font-size: clamp(32px, 5vw, 40px);
+				font-weight: 700;
+				color: #333333;
+				margin-bottom: 16px;
+				letter-spacing: -0.02em;
+			}
+
+			.features-header p {
+				font-size: 20px;
+				color: #666666;
+				max-width: 600px;
+				margin: 0 auto;
+			}
+
+			.features-grid {
+				display: grid;
+				grid-template-columns: 1fr;
+				gap: 40px;
+				max-width: 900px;
+				margin: 0 auto;
+			}
+
+			.feature {
+				background: white;
+				padding: 40px 32px;
+				border-radius: 16px;
+				box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+				text-align: center;
+				transition: all 0.3s ease;
+			}
+
+			.feature:hover {
+				transform: translateY(-4px);
+				box-shadow: 0 8px 40px rgba(0, 0, 0, 0.12);
+			}
+
+			.feature-icon {
+				width: 64px;
+				height: 64px;
+				background: linear-gradient(135deg, #007AFF, #005CE6);
+				border-radius: 16px;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				margin: 0 auto 24px;
+				font-size: 28px;
+				color: white;
+			}
+
+			.feature h3 {
+				font-size: 24px;
+				font-weight: 600;
+				color: #333333;
+				margin-bottom: 16px;
+			}
+
+			.feature p {
+				font-size: 16px;
+				color: #666666;
+				line-height: 1.6;
+			}
+
+			/* Social Proof Section */
+			.social-proof {
+				padding: 60px 0;
+				background: white;
+				text-align: center;
+			}
+
+			.social-proof h2 {
+				font-size: clamp(28px, 5vw, 36px);
+				font-weight: 700;
+				color: #333333;
+				margin-bottom: 16px;
+			}
+
+			.social-proof p {
+				font-size: 18px;
+				color: #666666;
+				margin-bottom: 40px;
+			}
+
+			.cta-button {
+				display: inline-flex;
+				align-items: center;
+				gap: 12px;
+				background: linear-gradient(135deg, #007AFF, #005CE6);
+				color: white;
+				padding: 18px 36px;
+				border-radius: 50px;
+				text-decoration: none;
+				font-weight: 600;
+				font-size: 18px;
+				box-shadow: 0 8px 32px rgba(0, 122, 255, 0.3);
+				transition: all 0.3s ease;
+			}
+
+			.cta-button:hover {
+				transform: translateY(-2px);
+				box-shadow: 0 12px 40px rgba(0, 122, 255, 0.4);
+			}
+
+			/* Footer */
+			.footer {
+				background: #333333;
+				color: white;
+				padding: 40px 0;
+			}
+
+			.footer-content {
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				text-align: center;
+				gap: 24px;
+			}
+
+			.footer-brand {
+				font-size: 24px;
+				font-weight: 700;
+				color: #007AFF;
+			}
+
+			.footer-links {
+				display: flex;
+				gap: 32px;
+				flex-wrap: wrap;
+				justify-content: center;
+			}
+
+			.footer-links a {
+				color: #CCCCCC;
+				text-decoration: none;
+				font-size: 16px;
+				transition: color 0.3s ease;
+			}
+
+			.footer-links a:hover {
+				color: #007AFF;
+			}
+
+			.footer-social {
+				display: flex;
+				gap: 16px;
+			}
+
+			.footer-social a {
+				width: 44px;
+				height: 44px;
+				background: #444444;
+				border-radius: 12px;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				color: #CCCCCC;
+				text-decoration: none;
+				font-size: 20px;
+				transition: all 0.3s ease;
+			}
+
+			.footer-social a:hover {
+				background: #007AFF;
+				color: white;
+			}
+
+			.footer-copyright {
+				color: #999999;
+				font-size: 14px;
+			}
+
+			/* App Store Buttons (Ready for Future) */
+			.app-store-buttons {
+				display: flex;
+				gap: 16px;
+				justify-content: center;
+				flex-wrap: wrap;
+				margin-top: 32px;
+			}
+
+			.app-store-button {
+				display: flex;
+				align-items: center;
+				gap: 12px;
+				background: #000000;
+				color: white;
+				padding: 12px 24px;
+				border-radius: 12px;
+				text-decoration: none;
+				font-weight: 500;
+				transition: all 0.3s ease;
+				opacity: 0.6;
+				pointer-events: none;
+			}
+
+			.app-store-button:hover {
+				background: #333333;
+			}
+
+			.app-store-button span {
+				font-size: 14px;
+			}
+
+			.app-store-button strong {
+				font-size: 18px;
+				font-weight: 600;
+			}
+
+			/* Responsive Design */
+			@media (min-width: 768px) {
+				.hero {
+					padding: 120px 0 80px;
+				}
+
+				.features-grid {
+					grid-template-columns: repeat(3, 1fr);
+					gap: 32px;
+				}
+
+				.feature {
+					text-align: left;
+				}
+
+				.feature-icon {
+					margin: 0 0 24px 0;
+				}
+
+				.footer-content {
+					flex-direction: row;
+					justify-content: space-between;
+					text-align: left;
+				}
+
+				.footer-links {
+					order: 2;
+				}
+
+				.footer-social {
+					order: 3;
+				}
+			}
+
+			@media (min-width: 1024px) {
+				.container {
+					padding: 0 32px;
+				}
+			}
+
+			/* Icons */
+			.icon {
+				display: inline-block;
+				width: 1em;
+				height: 1em;
+				stroke-width: 0;
+				stroke: currentColor;
+				fill: currentColor;
+			}
+		</style>
+	</head>
+	<body>
+		<!-- Hero Section -->
+		<section class="hero">
+			<div class="container">
+				<div class="hero-content">
+					<h1>Lower Your Golf Score with Smart Analytics, All in Your Pocket</h1>
+					<p>Effortless tracking meets AI-powered insights. Users improve their strokes, you can too.</p>
+					<a href="#features" class="hero-cta">
+						<span>📱</span>
+						Start Improving Today
+					</a>
+				</div>
+			</div>
+		</section>
+
+		<!-- Features Section -->
+		<section class="features" id="features">
+			<div class="container">
+				<div class="features-header">
+					<h2>Everything You Need to Lower Your Handicap</h2>
+					<p>Professional-grade analytics designed for the modern golfer</p>
+				</div>
+				
+				<div class="features-grid">
+					<div class="feature">
+						<div class="feature-icon">📊</div>
+						<h3>Effortless Shot Tracking</h3>
+						<p>Quick, intuitive shot logging that captures every detail without slowing down your round. Focus on your game, not data entry.</p>
+					</div>
+					
+					<div class="feature">
+						<div class="feature-icon">🧠</div>
+						<h3>AI-Powered Insights</h3>
+						<p>Advanced pattern recognition reveals exactly where you're losing strokes. Get personalized coaching recommendations that actually work.</p>
+					</div>
+					
+					<div class="feature">
+						<div class="feature-icon">📍</div>
+						<h3>Smart GPS Tracking</h3>
+						<p>Simple, accurate distance measurements help you make better club selections and approach decisions. No complexity, just results.</p>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<!-- Social Proof Section -->
+		<section class="social-proof">
+			<div class="container medium">
+				<h2>Join Golfers Already Saving Shots on Their Handicap</h2>
+				<p>Users improve their strokes with data-driven insights. You can too.</p>
+				<a href="#download" class="cta-button">
+					<span>⚡</span>
+					Get Golf Improve
+				</a>
+				
+				<!-- App Store Buttons (Ready for Launch) -->
+				<div class="app-store-buttons" id="download">
+					<a href="#" class="app-store-button">
+						<span>🍎</span>
+						<div>
+							<span>Download on the</span><br>
+							<strong>App Store</strong>
+						</div>
+					</a>
+					<a href="#" class="app-store-button">
+						<span>🤖</span>
+						<div>
+							<span>Get it on</span><br>
+							<strong>Google Play</strong>
+						</div>
+					</a>
+				</div>
+			</div>
+		</section>
+
+		<!-- Footer -->
+		<footer class="footer">
+			<div class="container">
+				<div class="footer-content">
+					<div class="footer-brand">Golf Improve</div>
+					
+					<div class="footer-links">
+						<a href="/support">Support</a>
+						<a href="/privacy-policy">Privacy Policy</a>
+					</div>
+					
+					<div class="footer-social">
+						<a href="#" aria-label="Instagram">
+							<span>📷</span>
+						</a>
+					</div>
+				</div>
+				
+				<div style="text-align: center; margin-top: 24px;">
+					<div class="footer-copyright">
+						&copy; 2025 Golf Improve. All rights reserved.
+					</div>
+				</div>
+			</div>
+		</footer>
+	</body>
+</html>
